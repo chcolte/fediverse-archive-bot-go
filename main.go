@@ -20,12 +20,6 @@ func main() {
 
 	connectChannel(ws, "globalTimeline")
 	
-
-	// Send Message
-	// sendRestMsg(ws, `{"REST-Key":"REST-Value1"}`)
-	// sendRestMsg(ws, `{"REST-Key":"REST-Value2"}`)
-	// sendRestMsg(ws, `{"REST-Key":"REST-Value3"}`)
-
 	// Receive Message Ligic
 	var recvMsg string
 	for {
@@ -39,8 +33,15 @@ func main() {
 }
 
 // when received
-func channelon(note string){
+func channelon(rawNote string) {
 	log.Println("Received")
+	streamingMessage, err := ParseStreamingMessage(rawNote)
+	if err != nil {
+		log.Printf("Error parsing note: %v", err)
+		return
+	}
+	//log.Println(rawNote)
+	log.Println(streamingMessage.Body.Body.UserID)
 }
 
 // Connect Channel
