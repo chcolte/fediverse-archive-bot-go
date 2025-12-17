@@ -1,0 +1,69 @@
+package main
+
+import (
+	"log"
+
+	"golang.org/x/net/websocket"
+	"github.com/google/uuid"
+)
+
+// WebSocket Client Sample
+func main() {
+	log.SetFlags(log.Lmicroseconds)
+
+	// WebSocket Dial
+	ws, dialErr := websocket.Dial("wss://misskey.io/streaming", "", "https://misskey.io")
+	if dialErr != nil {
+		log.Fatal(dialErr)
+	}
+	defer ws.Close()
+
+	connectChannel(ws, "globalTimeline")
+	
+
+	// Send Message
+	// sendRestMsg(ws, `{"REST-Key":"REST-Value1"}`)
+	// sendRestMsg(ws, `{"REST-Key":"REST-Value2"}`)
+	// sendRestMsg(ws, `{"REST-Key":"REST-Value3"}`)
+
+	// Receive Message Ligic
+	var recvMsg string
+	for {
+		recvErr := websocket.Message.Receive(ws, &recvMsg)
+		if recvErr != nil {
+			log.Fatal(recvErr)
+			break
+		}
+		channelon(recvMsg)
+	}
+}
+
+// when received
+func channelon(note string){
+	log.Println("Received")
+}
+
+// Connect Channel
+func connectChannel(ws *websocket.Conn, channel string) {
+	uuidV1, err := uuid.NewRandom()
+		if err != nil {
+			log.Fatal(err)
+		}
+	
+	sendRestMsg(ws, `{
+		"type": "connect",
+		"body": {
+			"channel": "`+channel+`",
+			"id": "`+uuidV1.String()+`"
+		}
+	}`)
+}
+
+// Send Message Ligic
+func sendRestMsg(ws *websocket.Conn, msg string) {
+	sendErr := websocket.Message.Send(ws, msg)
+	if sendErr != nil {
+		log.Fatal(sendErr)
+	}
+	log.Println("Send : " + msg + ", to Server")
+}
