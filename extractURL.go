@@ -30,17 +30,6 @@ type BadgeRole struct {
 	Behavior     string `json:"behavior"`
 }
 
-type Emojis struct {
-
-}
-
-type ReactionEmojis struct {
-
-}
-
-type Reactions struct {
-}
-
 type User struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
@@ -55,7 +44,7 @@ type User struct {
 	MakeNotesFollowersOnlyBefore int  `json:"makeNotesFollowersOnlyBefore"`
 	MakeNotesHiddenBefore        int  `json:"makeNotesHiddenBefore"`
 	Instance                     Instance `json:"instance"`
-	Emojis Emojis `json:"emojis"`
+	Emojis map[string]string `json:"emojis"`
 	OnlineStatus string `json:"onlineStatus"`
 	BadgeRoles   []BadgeRole `json:"badgeRoles"`
 }
@@ -134,13 +123,13 @@ type Note struct {
 	Files          []DriveFile `json:"files"`
 	Tags 		   []string `json:"tags"`
 	Poll Poll `json:"poll"`
-	Emojis Emojis `json:"emojis"`
+	Emojis map[string]string `json:"emojis"`
 	ChannelID string `json:"channelId"`
 	Channel Channel `json:"channel"`
 	LocalOnly          bool   `json:"localOnly"`
 	ReactionAcceptance string `json:"reactionAcceptance"`
-	ReactionEmojis     ReactionEmojis `json:"reactionEmojis"`
-	Reactions Reactions `json:"reactions"`
+	ReactionEmojis     map[string]string `json:"reactionEmojis"`
+	Reactions map[string]int `json:"reactions"`
 	ReactionCount            int      `json:"reactionCount"`
 	RenoteCount              int      `json:"renoteCount"`
 	RepliesCount             int      `json:"repliesCount"`
