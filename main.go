@@ -4,6 +4,11 @@ import (
 	"log"
 	"flag"
 	"strings"
+	"sync"
+	"os"
+	"os/signal"
+	"syscall"
+	"bufio"
 
 	"golang.org/x/net/websocket"
 	"github.com/google/uuid"
@@ -14,7 +19,7 @@ func main() {
 	mode, url, timeline := readFlags()
 	ws_url, http_url := urlAdjust(url)
 	startMessage(mode, url, timeline)
-
+	
 	// WebSocket Dial
 	ws, dialErr := websocket.Dial(ws_url, "", http_url)
 	if dialErr != nil {
@@ -27,16 +32,32 @@ func main() {
 	// connect to timeline
 	connectChannel(ws, timeline)
 	
-	// Receive Message Logic
-	var recvMsg string
-	for {
-		recvErr := websocket.Message.Receive(ws, &recvMsg)
-		if recvErr != nil {
-			log.Fatal(recvErr)
-			break
-		}
-		go channelon(recvMsg) // message processing
-	}
+	// Processing
+	var wg = sync.WaitGroup{}
+	dlqueue := make(chan string, 100)
+	loadPendingURLs(dlqueue)
+
+	wg.Add(1)
+	go MessageReceiver(ws, dlqueue, &wg)
+	
+	wg.Add(1)
+	go MediaDownloader(dlqueue, &wg)
+
+
+	// シグナルハンドリング
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	<-quit // シグナル待ち
+	log.Println("Shutting down...")
+
+	// 未処理のURLを保存する
+	savePendingURLs(dlqueue)
+	log.Println("Saved pending URLs to file")
+	
+	// チャネルを閉じてワーカーを停止させる
+	close(dlqueue)
+	log.Println("Closed download queue")
 }
 
 func startMessage(mode string, url string, timeline string){
@@ -76,25 +97,6 @@ func urlAdjust(url string)(ws string, http string){
 	return "wss://"+url, "https://"+url
 }
 
-// when received
-func channelon(rawNote string) {
-	streamingMessage, err := ParseStreamingMessage(rawNote)
-	if err != nil {
-		log.Printf("Error parsing note: %v", err)
-		return
-	}
-
-	note, err := ExtractNote(streamingMessage)
-	if err != nil {
-		log.Printf("Error extracting note: %v", err)
-		return
-	}
-
-	for _, url := range SafeExtractURL(note) {
-		log.Println(url)
-	}
-}
-
 // Connect Channel
 func connectChannel(ws *websocket.Conn, channel string) {
 	uuidV1, err := uuid.NewRandom()
@@ -118,5 +120,54 @@ func sendRestMsg(ws *websocket.Conn, msg string) {
 	sendErr := websocket.Message.Send(ws, msg)
 	if sendErr != nil {
 		log.Fatal(sendErr)
+	}
+}
+
+func loadPendingURLs(dlqueue chan string) {
+	file, err := os.Open("pending_urls.txt")
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("Failed to open pending_urls.txt: %v", err)
+		}
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	count := 0
+	for scanner.Scan() {
+		url := scanner.Text()
+		if url != "" {
+			dlqueue <- url
+			count++
+		}
+	}
+	log.Printf("Loaded %d pending URLs", count)
+	
+	// 読み込み終わったらファイルを削除（または空にする）
+	os.Remove("pending_urls.txt")
+}
+
+func savePendingURLs(dlqueue chan string) {
+	// チャネルに残っているものを取り出してファイルに保存
+	f, err := os.Create("pending_urls.txt")
+	if err != nil {
+		log.Printf("Failed to create pending_urls.txt: %v", err)
+		return
+	}
+	defer f.Close()
+
+	count := 0
+	// チャネルが空になるまで取り出す
+	// 注意: ワーカーも動いているので競合するが、ここで取り出せた分だけ保存する
+	for {
+		select {
+		case url := <-dlqueue:
+			f.WriteString(url + "\n")
+			count++
+		default:
+			log.Printf("Saved %d URLs to pending_urls.txt", count)
+			return
+		}
 	}
 }
