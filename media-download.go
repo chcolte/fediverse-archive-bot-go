@@ -13,23 +13,12 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/chcolte/fediverse-archive-bot-go/models"
 )
 
-// DownloadItem represents an item to be downloaded
-type DownloadItem struct {
-	URL      string
-	Datetime time.Time
-}
-
-// FilenameURLMapping represents the mapping between filename and URL
-type FilenameURLMapping struct {
-	Filepath     string `json:"filepath"`
-	URL          string `json:"url"`
-	Downloadtime string `json:"downloadtime"`
-}
-
 // MediaDownloader downloads assets from the download queue
-func MediaDownloader(dlqueue chan DownloadItem, wg *sync.WaitGroup, downloadDir string) {
+func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downloadDir string) {
 	defer wg.Done()
 	log.Println("MediaDownloader started")
 
@@ -43,7 +32,7 @@ func MediaDownloader(dlqueue chan DownloadItem, wg *sync.WaitGroup, downloadDir 
 		if item.URL != "" {
 			continue;
 		}
-		
+
 		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
 			log.Printf("Failed to download %s: %v", item.URL, err)
 		}
@@ -102,7 +91,7 @@ func writeFileNameURLMapping(fileURL, filepath string, downloadtime string, save
 		return err
 	}
 
-	data := FilenameURLMapping{
+	data := models.FilenameURLMapping{
 		Filepath:     filepath,
 		URL:          fileURL,
 		Downloadtime: downloadtime,
