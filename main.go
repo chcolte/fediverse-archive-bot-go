@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"bufio"
+	"encoding/json"
 
 	"golang.org/x/net/websocket"
 	"github.com/google/uuid"
@@ -34,14 +35,15 @@ func main() {
 	
 	// Processing
 	var wg = sync.WaitGroup{}
-	dlqueue := make(chan string, 100)
+	dlqueue := make(chan DownloadItem, 100)
+	downloadDir := "downloads"
 	loadPendingURLs(dlqueue)
 
 	wg.Add(1)
 	go MessageReceiver(ws, dlqueue, &wg)
 	
 	wg.Add(1)
-	go MediaDownloader(dlqueue, &wg)
+	go MediaDownloader(dlqueue, &wg, downloadDir)
 
 
 	// シグナルハンドリング
@@ -123,7 +125,7 @@ func sendRestMsg(ws *websocket.Conn, msg string) {
 	}
 }
 
-func loadPendingURLs(dlqueue chan string) {
+func loadPendingURLs(dlqueue chan DownloadItem) {
 	file, err := os.Open("pending_urls.txt")
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -136,9 +138,15 @@ func loadPendingURLs(dlqueue chan string) {
 	scanner := bufio.NewScanner(file)
 	count := 0
 	for scanner.Scan() {
-		url := scanner.Text()
-		if url != "" {
-			dlqueue <- url
+		line := scanner.Text()
+		if line != "" {
+			// Parse JSON line to get URL and datetime
+			var item DownloadItem
+			if err := json.Unmarshal([]byte(line), &item); err != nil {
+				log.Printf("Failed to parse pending URL line: %v", err)
+				continue
+			}
+			dlqueue <- item
 			count++
 		}
 	}
@@ -148,7 +156,7 @@ func loadPendingURLs(dlqueue chan string) {
 	os.Remove("pending_urls.txt")
 }
 
-func savePendingURLs(dlqueue chan string) {
+func savePendingURLs(dlqueue chan DownloadItem) {
 	// チャネルに残っているものを取り出してファイルに保存
 	f, err := os.Create("pending_urls.txt")
 	if err != nil {
@@ -162,8 +170,14 @@ func savePendingURLs(dlqueue chan string) {
 	// 注意: ワーカーも動いているので競合するが、ここで取り出せた分だけ保存する
 	for {
 		select {
-		case url := <-dlqueue:
-			f.WriteString(url + "\n")
+		case item := <-dlqueue:
+			// Save as JSON to preserve both URL and datetime
+			line, err := json.Marshal(item)
+			if err != nil {
+				log.Printf("Failed to marshal item: %v", err)
+				continue
+			}
+			f.WriteString(string(line) + "\n")
 			count++
 		default:
 			log.Printf("Saved %d URLs to pending_urls.txt", count)

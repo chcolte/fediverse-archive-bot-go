@@ -11,7 +11,7 @@ import (
 var overflowMu sync.Mutex
 
 // websocketからのデータを受信する
-func MessageReceiver(ws *websocket.Conn, dlqueue chan string, wg *sync.WaitGroup) {
+func MessageReceiver(ws *websocket.Conn, dlqueue chan DownloadItem, wg *sync.WaitGroup) {
 	log.Println("MessageReceiver started")
 	var recvMsg string
 	for {
@@ -26,7 +26,7 @@ func MessageReceiver(ws *websocket.Conn, dlqueue chan string, wg *sync.WaitGroup
 }
 
 // 受信データを処理する
-func messageProcesser(rawNote string, dlqueue chan string) {
+func messageProcesser(rawNote string, dlqueue chan DownloadItem) {
 	streamingMessage, err := ParseStreamingMessage(rawNote)
 	if err != nil {
 		log.Printf("Error parsing note: %v", err)
@@ -40,8 +40,12 @@ func messageProcesser(rawNote string, dlqueue chan string) {
 	}
 
 	for _, url := range SafeExtractURL(note) {
+		item := DownloadItem{
+			URL:      url,
+			Datetime: note.CreatedAt,
+		}
 		select {
-		case dlqueue <- url:
+		case dlqueue <- item:
 			log.Println("queued: ", url)
 		default:
 			log.Printf("Queue full, saving to overflow file: %s", url)
