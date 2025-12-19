@@ -28,14 +28,13 @@ func main() {
 	// }()
 	
 
-	system, mode, url, timeline, verbose := readFlags()
-	startMessage(system, mode, url, timeline)
+	system, mode, url, timeline, downloadDir, verbose := readFlags()
+	startMessage(system, mode, url, timeline, downloadDir)
 
 	logger.SetVerbose(verbose)
 
-	// ダウンロードキューとディレクトリを準備
+	// ダウンロードキューを準備
 	dlqueue := make(chan models.DownloadItem, 100)
-	downloadDir := "downloads"
 	loadPendingURLs(dlqueue)
 
 	var wg sync.WaitGroup
@@ -105,28 +104,30 @@ func main() {
 	logger.Info("Closed download queue")
 }
 
-func startMessage(system string, mode string, url string, timeline string) {
+func startMessage(system string, mode string, url string, timeline string, downloadDir string) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
 	logger.Info("Fediverse Archive Bot v1.0.0")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
-	logger.Info("- Target System: ", system)
-	logger.Info("- Mode:", mode)
-	logger.Info("- URL:", url)
-	logger.Info("- Timeline:", timeline)
+	logger.Info("- Target System:      ", system)
+	logger.Info("- Mode:               ", mode)
+	logger.Info("- URL:                ", url)
+	logger.Info("- Timeline:           ", timeline)
+	logger.Info("- Download Directory: ", downloadDir)
 	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, string, bool) {
+func readFlags() (string, string, string, string, string, bool) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
 		u = flag.String("u", "", "server URL. (e.g. https://misskey.io)")
 		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
+		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
 	)
 	flag.Parse()
-	return *s, *m, *u, *t, *v
+	return *s, *m, *u, *t, *d, *v
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {

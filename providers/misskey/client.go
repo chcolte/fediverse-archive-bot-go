@@ -37,7 +37,7 @@ func (m *MisskeyProvider) Connect() error {
 		return err
 	}
 	m.ws = ws
-	logger.Info("Connected to", wsURL)
+	logger.Info("Connected to ", wsURL+"/streaming")
 	return nil
 }
 
