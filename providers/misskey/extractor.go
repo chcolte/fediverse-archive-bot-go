@@ -1,6 +1,6 @@
 package misskey
 
-// extractURL は Note オブジェクトから全てのURLを抽出する
+// Noteオブジェクトから全てのURLを抽出する
 func extractURL(note Note) []string {
 	var urls []string
 	urls = append(urls, extractURLUser(note.User)...)
@@ -22,7 +22,7 @@ func extractURL(note Note) []string {
 	return urls
 }
 
-// SafeExtractURL は空文字列をフィルタリングしてURLを抽出する
+// 空文字列をフィルタリングしてNoteオブジェクトからURLを抽出する
 func SafeExtractURL(note Note) []string {
 	urls := extractURL(note)
 	var safeUrls []string

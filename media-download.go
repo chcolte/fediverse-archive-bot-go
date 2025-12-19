@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,27 +13,29 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 )
 
 // MediaDownloader downloads assets from the download queue
 func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downloadDir string) {
 	defer wg.Done()
-	log.Println("MediaDownloader started")
+	logger.Info("MediaDownloader started")
 
 	// Create download directory if it doesn't exist
 	if err := os.MkdirAll(downloadDir, 0755); err != nil {
-		log.Printf("Failed to create download directory: %v", err)
+		logger.Errorf("Failed to create download directory: %v", err)
 		return
 	}
 
 	for item := range dlqueue {
-		if item.URL != "" {
-			continue;
+		if item.URL == "" {
+			continue
 		}
 
 		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
-			log.Printf("Failed to download %s: %v", item.URL, err)
+			logger.Errorf("Failed to download %s: %v, requeing.", item.URL, err)
+			dlqueue <- item
 		}
 	}
 }
@@ -44,7 +45,6 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	// Download file
 	resp, err := http.Get(fileURL)
 	if err != nil {
-		log.Println("Failed to download " + fileURL)
 		return err
 	}
 	defer resp.Body.Close()
@@ -77,7 +77,7 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 		return err
 	}
 
-	// Save metadata
+	// Save metadata (今は決め打ち)
 	fileDownloadPathRelative := filepath.Join("data", "assets", filename)
 	metadataSavePath := filepath.Join(dailyDir, "data", "filename_url_mapping.jsonl")
 	return writeFileNameURLMapping(fileURL, fileDownloadPathRelative, time.Now().UTC().Format(time.RFC3339), metadataSavePath)

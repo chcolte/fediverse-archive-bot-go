@@ -2,9 +2,9 @@ package misskey
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 
+	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
@@ -32,7 +32,7 @@ func (m *MisskeyProvider) Connect() error {
 		return err
 	}
 	m.ws = ws
-	log.Println("Connected to", wsURL)
+	logger.Info("Connected to", wsURL)
 	return nil
 }
 
@@ -50,23 +50,24 @@ func (m *MisskeyProvider) ConnectChannel() error {
 			"id": "` + id.String() + `"
 		}
 	}`
+	logger.Debug("Send message: ", msg)
 
 	if err := websocket.Message.Send(m.ws, msg); err != nil {
 		return err
 	}
 
-	log.Println("Connected to channel:", m.Timeline)
+	logger.Info("Connected to channel:", m.Timeline)
 	return nil
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
 func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) {
-	log.Println("MisskeyProvider: Starting to receive messages")
+	logger.Info("MisskeyProvider: Starting to receive messages")
 
 	for {
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
-			log.Printf("MisskeyProvider: Receive error: %v", err)
+			logger.Errorf("MisskeyProvider: Receive error: %v", err)
 			continue
 		}
 
@@ -78,7 +79,6 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 		urls := SafeExtractURL(note)
 
 		for _, url := range urls {
-			log.Println("Queued:", url)
 			output <- models.DownloadItem{
 				URL:      url,
 				Datetime: note.CreatedAt,
@@ -98,7 +98,7 @@ func (m *MisskeyProvider) Close() error {
 func (m *MisskeyProvider) parseStreamingMessage(raw string) StreamingMessage {
 	var msg StreamingMessage
 	if err := json.Unmarshal([]byte(raw), &msg); err != nil {
-		log.Printf("Failed to parse message: %v", err)
+		logger.Errorf("Failed to parse message: %v", err)
 		return StreamingMessage{}
 	}
 	return msg
