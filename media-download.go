@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"strings"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
@@ -34,8 +35,8 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 		}
 
 		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
-			logger.Errorf("Failed to download %s: %v, requeing.", item.URL, err)
-			dlqueue <- item
+			logger.Errorf("Failed to download %s: %v", item.URL, err)
+			// dlqueue <- item //リキューするなら，上限を設ける仕組みがないとスタック
 		}
 	}
 }
@@ -121,7 +122,16 @@ func determineFileName(fileURL string, filebinary []byte) string {
 		return hash
 	}
 
-	ext := path.Ext(parsedURL.Path)
+	// URLのクエリパラメータにつく"?"が%3fとエンコードされてしまっているURLを渡された際に，
+	// 拡張子が，適切でなくなることを事前に弾く
+	// ex. https://proxy.misskeyusercontent.jp/avatar/media.misskeyusercontent.jp%2Fio%2Fwebpublic-4864c051-a66f-45e5-ae46-33416947992e.webp%3Fsensitive%3Dtrue?avatar=1
+	// ex. data/assets/e50059a61aa27bc3bfa53631eb15fa4683a62e2d420eebe7134da67ff707b0ed.webp?sensitive=true
+    urlPath := parsedURL.Path
+    if idx := strings.Index(urlPath, "?"); idx != -1 {
+        urlPath = urlPath[:idx]
+    }
+
+	ext := path.Ext(urlPath)
 	return hash + ext
 }
 
