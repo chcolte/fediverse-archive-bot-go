@@ -13,6 +13,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
+	//"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	// Misskey Provider
-	misskeyProvider := misskey.NewMisskeyProvider(url, timeline)
+	misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
 	if err := misskeyProvider.Connect(); err != nil {
 		logger.Error("Failed to connect:", err)
 	}
@@ -46,6 +47,23 @@ func main() {
 		misskeyProvider.ReceiveMessages(dlqueue)
 	}()
 
+	// // Nostr Provider
+	// nostrProvider := nostr.NewNostrProvider(url)
+	// if err := nostrProvider.Connect(); err != nil {
+	// 	logger.Error("Failed to connect:", err)
+	// }
+	// defer nostrProvider.Close()
+
+	// // メッセージ受信を開始
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	nostrProvider.ReceiveMessages(dlqueue)
+	// }()
+
+
+
+
 	// ダウンローダーを開始
 	wg.Add(1)
 	go MediaDownloader(dlqueue, &wg, downloadDir)
@@ -56,8 +74,7 @@ func main() {
 
 	<-quit // シグナル待ち
 	logger.Info("Shutting down...")
-	// Misskey Providerを閉じる
-	misskeyProvider.Close()
+	
 
 	// 未処理のURLを保存する
 	savePendingURLs(dlqueue)
@@ -81,9 +98,9 @@ func startMessage(mode string, url string, timeline string) {
 
 func readFlags() (string, string, string, bool) {
 	var (
-		m = flag.String("m", "live", "archive mode.(live or past)")
+		m = flag.String("m", "live", "archive mode.(currently live only)")
 		u = flag.String("u", "", "server URL. (e.g. https://misskey.io)")
-		t = flag.String("t", "localTimeline", "timeline (e.g localTimeline, globalTimeline)")
+		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
 		v = flag.Bool("V", false, "verbose output")
 	)
 	flag.Parse()
