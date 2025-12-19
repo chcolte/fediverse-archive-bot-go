@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	//"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 
 	// for debug 
@@ -29,57 +28,62 @@ func main() {
 	// }()
 	
 
-	mode, url, timeline, verbose := readFlags()
-	startMessage(mode, url, timeline)
+	system, mode, url, timeline, verbose := readFlags()
+	startMessage(system, mode, url, timeline)
 
 	logger.SetVerbose(verbose)
 
-	// ダウンロードキューとディレクトリ
+	// ダウンロードキューとディレクトリを準備
 	dlqueue := make(chan models.DownloadItem, 100)
 	downloadDir := "downloads"
 	loadPendingURLs(dlqueue)
 
 	var wg sync.WaitGroup
 
-	// // Misskey Provider
-	// misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
-	// if err := misskeyProvider.Connect(); err != nil {
-	// 	logger.Error("Failed to connect:", err)
-	// }
-	// defer misskeyProvider.Close()
+	// 受信プログラムをスタート
+	switch system {
+		case "misskey":
+			misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
+			if err := misskeyProvider.Connect(); err != nil {
+				logger.Error("Failed to connect:", err)
+			}
+			defer misskeyProvider.Close()
 
-	// if err := misskeyProvider.ConnectChannel(); err != nil {
-	// 	logger.Error("Failed to connect channel:", err)
-	// }
+			if err := misskeyProvider.ConnectChannel(); err != nil {
+				logger.Error("Failed to connect channel:", err)
+			}
 
-	// // メッセージ受信を開始
-	// wg.Add(1)
-	// go func() {
-	// 	defer wg.Done()
-	// 	misskeyProvider.ReceiveMessages(dlqueue)
-	// }()
+			// メッセージ受信を開始
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				misskeyProvider.ReceiveMessages(dlqueue)
+			}()
 
-	// Nostr Provider
-	nostrProvider := nostr.NewNostrProvider(url, downloadDir)
-	if err := nostrProvider.Connect(); err != nil {
-		logger.Error("Failed to connect:", err)
+
+		case "nostr":
+			nostrProvider := nostr.NewNostrProvider(url, downloadDir)
+			if err := nostrProvider.Connect(); err != nil {
+				logger.Error("Failed to connect:", err)
+			}
+			defer nostrProvider.Close()
+
+			if err := nostrProvider.ConnectChannel(); err != nil {
+				logger.Error("Failed to connect channel:", err)
+			}
+
+			// メッセージ受信を開始
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				nostrProvider.ReceiveMessages(dlqueue)
+			}()
+
+		default:
+			logger.Error("Invalid system specified")
+			os.Exit(1)
 	}
-	defer nostrProvider.Close()
-
-	if err := nostrProvider.ConnectChannel(); err != nil {
-		logger.Error("Failed to connect channel:", err)
-	}
-
-	// メッセージ受信を開始
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		nostrProvider.ReceiveMessages(dlqueue)
-	}()
-
-
-
-
+	
 	// ダウンローダーを開始
 	wg.Add(1)
 	go MediaDownloader(dlqueue, &wg, downloadDir)
@@ -101,26 +105,28 @@ func main() {
 	logger.Info("Closed download queue")
 }
 
-func startMessage(mode string, url string, timeline string) {
-	log.SetFlags(0)
-	log.Println("---------------------------------------------------")
-	log.Println("Fediverse Archive Bot v1.0.0")
-	log.Println("https://github.com/chcolte/fediverse-archive-bot-go")
-	log.Println("- Mode:", mode)
-	log.Println("- URL:", url)
-	log.Println("- Timeline:", timeline)
-	log.Println("---------------------------------------------------")
+func startMessage(system string, mode string, url string, timeline string) {
+	logger.SetFlags(0)
+	logger.Info("---------------------------------------------------")
+	logger.Info("Fediverse Archive Bot v1.0.0")
+	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
+	logger.Info("- Target System: ", system)
+	logger.Info("- Mode:", mode)
+	logger.Info("- URL:", url)
+	logger.Info("- Timeline:", timeline)
+	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, bool) {
+func readFlags() (string, string, string, string, bool) {
 	var (
+		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
 		u = flag.String("u", "", "server URL. (e.g. https://misskey.io)")
 		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
 		v = flag.Bool("V", false, "verbose output")
 	)
 	flag.Parse()
-	return *m, *u, *t, *v
+	return *s, *m, *u, *t, *v
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {
