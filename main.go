@@ -14,9 +14,21 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	//"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+
+	// for debug 
+	// "net/http"
+	// _ "net/http/pprof"
 )
 
 func main() {
+
+	// for debug
+	// go func() {
+	// 	log.Println("pprof server listening on :6060")
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
+	
+
 	mode, url, timeline, verbose := readFlags()
 	startMessage(mode, url, timeline)
 
