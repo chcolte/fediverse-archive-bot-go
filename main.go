@@ -12,8 +12,8 @@ import (
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
-	//"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	//"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 
 	// for debug 
 	// "net/http"
@@ -41,14 +41,32 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// Misskey Provider
-	misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
-	if err := misskeyProvider.Connect(); err != nil {
+	// // Misskey Provider
+	// misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
+	// if err := misskeyProvider.Connect(); err != nil {
+	// 	logger.Error("Failed to connect:", err)
+	// }
+	// defer misskeyProvider.Close()
+
+	// if err := misskeyProvider.ConnectChannel(); err != nil {
+	// 	logger.Error("Failed to connect channel:", err)
+	// }
+
+	// // メッセージ受信を開始
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	misskeyProvider.ReceiveMessages(dlqueue)
+	// }()
+
+	// Nostr Provider
+	nostrProvider := nostr.NewNostrProvider(url, downloadDir)
+	if err := nostrProvider.Connect(); err != nil {
 		logger.Error("Failed to connect:", err)
 	}
-	defer misskeyProvider.Close()
+	defer nostrProvider.Close()
 
-	if err := misskeyProvider.ConnectChannel(); err != nil {
+	if err := nostrProvider.ConnectChannel(); err != nil {
 		logger.Error("Failed to connect channel:", err)
 	}
 
@@ -56,22 +74,8 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		misskeyProvider.ReceiveMessages(dlqueue)
+		nostrProvider.ReceiveMessages(dlqueue)
 	}()
-
-	// // Nostr Provider
-	// nostrProvider := nostr.NewNostrProvider(url)
-	// if err := nostrProvider.Connect(); err != nil {
-	// 	logger.Error("Failed to connect:", err)
-	// }
-	// defer nostrProvider.Close()
-
-	// // メッセージ受信を開始
-	// wg.Add(1)
-	// go func() {
-	// 	defer wg.Done()
-	// 	nostrProvider.ReceiveMessages(dlqueue)
-	// }()
 
 
 
