@@ -1,13 +1,13 @@
 package nostr
 
 import (
-	//"encoding/json"
 	"strings"
 	"os"
 	"fmt"
-	//"time"
+	"time"
 	"path/filepath"
 	"encoding/json"
+	"mvdan.cc/xurls/v2"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
@@ -19,6 +19,7 @@ type NostrProvider struct {
 	URL      string
 	DownloadDir string
 	ws       *websocket.Conn
+	subscriptionID string
 }
 
 // 新しい NostrProvider を作成
@@ -47,10 +48,11 @@ func (m *NostrProvider) ConnectChannel() error {
 	if err != nil {
 		return err
 	}
+	m.subscriptionID = id.String()
 
 	msg := `[
 		"REQ",
-		"` + id.String() + `",
+		"` + m.subscriptionID + `",
 		{ }
 	]`
 	logger.Debug("Send message: ", msg)
@@ -81,29 +83,60 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 		}
 		logger.Debug("Received message: ", rawMsg)
 
-		// //メッセージパース
-		// msg, _ := unmarshalJSON([]byte(rawMsg))
 
-		// // 日毎ディレクトリを作成(なければ)
-		// dateStr := time.Unix(msg.Event.CreatedAt, 0).Format("2006-01-02")
-		// dailyDir := filepath.Join(m.DownloadDir, dateStr)
-		// assetsDir := filepath.Join(dailyDir, "data")
+		msg, _ := unmarshalJSON([]byte(rawMsg))
+		if (msg.Type == "EVENT") {
+			logger.Debug("Parsed message: ", msg.Event.CreatedAt)
 
-		// if err := os.MkdirAll(assetsDir, 0755); err != nil {
-		// 	logger.Errorf("Failed to create dailydownload directory: %v", err)
-		// 	continue
-		// }
+			//日毎ディレクトリを作成(なければ)
+			dateStr := time.Unix(msg.Event.CreatedAt, 0).Format("2006-01-02")
+			dailyDir := filepath.Join(m.DownloadDir, dateStr)
 
-		// 受信した生メッセージを保存
-		JSONSavePath := filepath.Join(m.DownloadDir, "download.jsonl")
-		m.AppendToFile(rawMsg, JSONSavePath)
+			if err := os.MkdirAll(dailyDir, 0755); err != nil {
+				logger.Errorf("Failed to create daily directory: %v", err)
+				continue
+			}
 
-		//URL抽出
+			// 受信した生メッセージを保存
+			JSONSavePath := filepath.Join(dailyDir, dateStr+".jsonl")
+			m.AppendToFile(rawMsg, JSONSavePath)
+
+			// URL抽出→キューイング
+			// リレーのwssはダウンロードできないので除外
+			// TODO: メディア以外のURL(wss, html etc.)が多くを占めているが，それらは除外してもよいのでは。
+			rxStrict := xurls.Strict()
+			foundURLs := rxStrict.FindAllString(rawMsg, -1)
+			for _, url := range foundURLs {
+				output <- models.DownloadItem{
+					URL: url,
+					Datetime: time.Unix(msg.Event.CreatedAt, 0),
+				}
+			}
+
+		}else if(msg.Type == "EOSE"){
+			logger.Info("Received End of Stored Events. The real-time stream is being acquired.")
+			
+		}else{
+			logger.Info("Parsed message: ", msg.Type)
+		}
 	}
 }
 
 // WebSocket接続を閉じる
 func (m *NostrProvider) Close() error {
+	
+	msg := `[
+		"CLOSE",
+		"` + m.subscriptionID + `"
+	]`
+
+	if err := websocket.Message.Send(m.ws, msg); err != nil {
+		return err
+	}
+	logger.Debug("Send message: ", msg)
+	logger.Info("Closed connection to Timeline (" + m.subscriptionID + ").")
+
+
 	if m.ws != nil {
 		return m.ws.Close()
 	}
@@ -169,7 +202,7 @@ func unmarshalJSON(data []byte) (NostrMessage, error) {
 	if err := json.Unmarshal(raw[0], &NostrMessage.Type); err != nil {
 		return NostrMessage, err
 	}
-
+	logger.Debug("Message type: ", NostrMessage.Type)
 	switch NostrMessage.Type {
 	case "EVENT":
 		if len(raw) >= 3 {
