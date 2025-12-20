@@ -11,6 +11,7 @@ import (
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 
@@ -39,49 +40,37 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	// 受信プログラムをスタート
+	// システムの選択
+	var provider providers.PlatformProvider
 	switch system {
 		case "misskey":
-			misskeyProvider := misskey.NewMisskeyProvider(url, timeline, downloadDir)
-			if err := misskeyProvider.Connect(); err != nil {
-				logger.Error("Failed to connect:", err)
-			}
-			defer misskeyProvider.Close()
-
-			if err := misskeyProvider.ConnectChannel(); err != nil {
-				logger.Error("Failed to connect channel:", err)
-			}
-
-			// メッセージ受信を開始
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				misskeyProvider.ReceiveMessages(dlqueue)
-			}()
-
+			provider = misskey.NewMisskeyProvider(url, timeline, downloadDir)
 
 		case "nostr":
-			nostrProvider := nostr.NewNostrProvider(url, downloadDir)
-			if err := nostrProvider.Connect(); err != nil {
-				logger.Error("Failed to connect:", err)
-			}
-			defer nostrProvider.Close()
-
-			if err := nostrProvider.ConnectChannel(); err != nil {
-				logger.Error("Failed to connect channel:", err)
-			}
-
-			// メッセージ受信を開始
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				nostrProvider.ReceiveMessages(dlqueue)
-			}()
+			provider = nostr.NewNostrProvider(url, downloadDir)
 
 		default:
 			logger.Error("Invalid system specified")
 			os.Exit(1)
 	}
+
+	// WebSocket接続
+	if err := provider.Connect(); err != nil {
+		logger.Error("Failed to connect:", err)
+	}
+	defer provider.Close()
+	
+	// チャネル接続
+	if err := provider.ConnectChannel(); err != nil {
+		logger.Error("Failed to connect channel:", err)
+	}
+
+	// メッセージ受信を開始
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		provider.ReceiveMessages(dlqueue)
+	}()
 	
 	// ダウンローダーを開始
 	wg.Add(1)
