@@ -28,14 +28,14 @@ func main() {
 	// }()
 	
 
-	system, mode, url, timeline, downloadDir, verbose := readFlags()
-	startMessage(system, mode, url, timeline, downloadDir)
+	system, mode, url, timeline, downloadDir, verbose, media := readFlags()
+	startMessage(system, mode, url, timeline, downloadDir, media)
 
 	logger.SetVerbose(verbose)
 
 	// ダウンロードキューを準備
 	dlqueue := make(chan models.DownloadItem, 100)
-	loadPendingURLs(dlqueue)
+	//loadPendingURLs(dlqueue) // なぜか動かすと，スタックする
 
 	var wg sync.WaitGroup
 
@@ -85,7 +85,16 @@ func main() {
 	
 	// ダウンローダーを開始
 	wg.Add(1)
-	go MediaDownloader(dlqueue, &wg, downloadDir)
+	if (media) {
+		go MediaDownloader(dlqueue, &wg, downloadDir)
+	}else{
+		go func(){
+			defer wg.Done()
+			for item := range dlqueue {
+				logger.Debug("Discarding item:", item)
+			}
+		}()
+	}
 
 	// シグナルハンドリング
 	quit := make(chan os.Signal, 1)
@@ -104,7 +113,7 @@ func main() {
 	logger.Info("Closed download queue")
 }
 
-func startMessage(system string, mode string, url string, timeline string, downloadDir string) {
+func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
 	logger.Info("Fediverse Archive Bot v1.0.0")
@@ -113,11 +122,12 @@ func startMessage(system string, mode string, url string, timeline string, downl
 	logger.Info("- Mode:               ", mode)
 	logger.Info("- URL:                ", url)
 	logger.Info("- Timeline:           ", timeline)
+	logger.Info("- Download media:     ", media)
 	logger.Info("- Download Directory: ", downloadDir)
 	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, string, string, bool) {
+func readFlags() (string, string, string, string, string, bool, bool) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
@@ -125,9 +135,10 @@ func readFlags() (string, string, string, string, string, bool) {
 		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
 		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
+		M = flag.Bool("media", false, "download media files")
 	)
 	flag.Parse()
-	return *s, *m, *u, *t, *d, *v
+	return *s, *m, *u, *t, *d, *v, *M
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {
