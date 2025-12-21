@@ -79,7 +79,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
 			logger.Errorf("NostrProvider: Receive error: %v", err)
-			continue
+			return // Exit on any receive error to prevent infinite error loops
 		}
 		logger.Debug("Received message: ", rawMsg)
 

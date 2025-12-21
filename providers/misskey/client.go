@@ -80,7 +80,7 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
 			logger.Errorf("MisskeyProvider: Receive error: %v", err)
-			continue
+			return // Exit on any receive error to prevent infinite error loops
 		}
 
 		// メッセージをパース
