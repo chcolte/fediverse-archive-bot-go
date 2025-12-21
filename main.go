@@ -105,7 +105,7 @@ func main() {
 func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
-	logger.Info("Fediverse Archive Bot v1.0.0")
+	logger.Info("Fediverse Archive Bot v0.1.1-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
 	logger.Info("- Target System:      ", system)
 	logger.Info("- Mode:               ", mode)
