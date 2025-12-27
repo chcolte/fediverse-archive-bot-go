@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
@@ -69,7 +70,26 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		provider.ReceiveMessages(dlqueue)
+		for {
+			if err := provider.ReceiveMessages(dlqueue); err != nil {
+				logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds...", err)
+				time.Sleep(5 * time.Second)
+				
+				// 再接続
+				provider.Close()
+				if err := provider.Connect(); err != nil {
+					logger.Errorf("Reconnect failed: %v. Retrying...", err)
+					continue
+				}
+				if err := provider.ConnectChannel(); err != nil {
+					logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
+					continue
+				}
+				logger.Info("Reconnected successfully")
+				continue
+			}
+			break
+		}
 	}()
 	
 	// ダウンローダーを開始

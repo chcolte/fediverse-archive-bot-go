@@ -66,28 +66,20 @@ func (m *NostrProvider) ConnectChannel() error {
 }
 
 // メッセージを受信
-func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) {
+func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
 	logger.Info("NostrProvider: Starting to receive messages")
 
 	// ルートダウンロードディレクトリを作成
 	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
 		logger.Errorf("Failed to create root download directory: %v", err)
-		return
+		return err
 	}
 
 	for {
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
-			logger.Errorf("NostrProvider: Receive error: %v. Reconnecting in 5 seconds...", err)
-			
-			// 再接続を試みる
-			time.Sleep(5 * time.Second)
-			if err := m.reconnect(); err != nil {
-				logger.Errorf("NostrProvider: Reconnect failed: %v. Retrying in 5 seconds...", err)
-				continue
-			}
-			logger.Info("NostrProvider: Reconnected successfully")
-			continue
+			logger.Errorf("NostrProvider: Receive error: %v", err)
+			return err
 		}
 		logger.Debug("Received message: ", rawMsg)
 
@@ -128,23 +120,6 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 			logger.Info("Parsed message: ", msg.Type)
 		}
 	}
-}
-
-// 再接続処理
-func (m *NostrProvider) reconnect() error {
-	// 既存の接続を閉じる
-	if m.ws != nil {
-		m.ws.Close()
-	}
-	
-	// 再接続
-	if err := m.Connect(); err != nil {
-		return err
-	}
-	if err := m.ConnectChannel(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // WebSocket接続を閉じる

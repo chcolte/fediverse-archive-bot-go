@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"fmt"
-	"time"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
@@ -67,29 +66,21 @@ func (m *MisskeyProvider) ConnectChannel() error {
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
-func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) {
+func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
 	logger.Info("MisskeyProvider: Starting to receive messages")
 	
 	// ルートダウンロードディレクトリを作成
 	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
 		logger.Errorf("Failed to create root download directory: %v", err)
-		return
+		return err
 	}
 	
 	for {
 		// メッセージを受信
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
-			logger.Errorf("MisskeyProvider: Receive error: %v. Reconnecting in 5 seconds...", err)
-			
-			// 再接続を試みる
-			time.Sleep(5 * time.Second)
-			if err := m.reconnect(); err != nil {
-				logger.Errorf("MisskeyProvider: Reconnect failed: %v. Retrying in 5 seconds...", err)
-				continue
-			}
-			logger.Info("MisskeyProvider: Reconnected successfully")
-			continue
+			logger.Errorf("MisskeyProvider: Receive error: %v", err)
+			return err
 		}
 
 		// メッセージをパース
@@ -122,23 +113,6 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) {
 			}
 		}
 	}
-}
-
-// 再接続処理
-func (m *MisskeyProvider) reconnect() error {
-	// 既存の接続を閉じる
-	if m.ws != nil {
-		m.ws.Close()
-	}
-	
-	// 再接続
-	if err := m.Connect(); err != nil {
-		return err
-	}
-	if err := m.ConnectChannel(); err != nil {
-		return err
-	}
-	return nil
 }
 
 // WebSocket 接続を閉じる

@@ -6,6 +6,6 @@ import "github.com/chcolte/fediverse-archive-bot-go/models"
 type PlatformProvider interface {
 	Connect() error
 	ConnectChannel() error
-	ReceiveMessages(output chan<- models.DownloadItem)
+	ReceiveMessages(output chan<- models.DownloadItem) error
 	Close() error
 }
