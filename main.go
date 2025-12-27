@@ -15,6 +15,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
 
 	// for debug 
 	// "net/http"
@@ -49,6 +50,9 @@ func main() {
 
 		case "nostr":
 			provider = nostr.NewNostrProvider(url, downloadDir)
+		
+		case "bluesky":
+			provider = bluesky.NewBlueskyProvider(url, downloadDir)
 
 		default:
 			logger.Error("Invalid system specified")
