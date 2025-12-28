@@ -31,7 +31,7 @@ func main() {
 	// }()
 	
 
-	system, mode, url, timeline, downloadDir, verbose, media := readFlags()
+	system, mode, url, timeline, downloadDir, verbose, media, parallelDownload := readFlags()
 	startMessage(system, mode, url, timeline, downloadDir, media)
 
 	logger.SetVerbose(verbose)
@@ -99,7 +99,9 @@ func main() {
 	// ダウンローダーを開始
 	wg.Add(1)
 	if (media) {
-		go MediaDownloader(dlqueue, &wg, downloadDir)
+		for i := 0; i < parallelDownload; i++ {
+			go MediaDownloader(dlqueue, &wg, downloadDir)
+		}
 	}else{
 		go func(){
 			defer wg.Done()
@@ -140,7 +142,7 @@ func startMessage(system string, mode string, url string, timeline string, downl
 	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, string, string, bool, bool) {
+func readFlags() (string, string, string, string, string, bool, bool, int) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
@@ -149,9 +151,10 @@ func readFlags() (string, string, string, string, string, bool, bool) {
 		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
 		M = flag.Bool("media", false, "download media files")
+		P = flag.Int("parallel-download", 1, "Number of Media Downloaders")
 	)
 	flag.Parse()
-	return *s, *m, *u, *t, *d, *v, *M
+	return *s, *m, *u, *t, *d, *v, *M, *P
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {
