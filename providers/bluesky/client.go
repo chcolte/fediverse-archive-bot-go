@@ -373,9 +373,25 @@ func cidToString(v interface{}) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// Blob URLを構築
-func buildBlobURL(did, cidStr string) string {
-	return fmt.Sprintf("https://bsky.social/xrpc/com.atproto.sync.getBlob?did=%s&cid=%s", did, cidStr)
+// Blob URLを構築（CDN経由）
+func buildBlobURL(did, cidStr, mimeType string) string {
+	// mimeTypeからCDN用の拡張子を決定
+	ext := "jpeg" // デフォルト
+	switch mimeType {
+	case "image/png":
+		ext = "png"
+	case "image/gif":
+		ext = "gif"
+	case "image/webp":
+		ext = "webp"
+	case "image/avif":
+		ext = "avif"
+	case "video/mp4":
+		// 動画はAPIエンドポイントを使う
+		return fmt.Sprintf("https://bsky.social/xrpc/com.atproto.sync.getBlob?did=%s&cid=%s", did, cidStr)
+	}
+	// 形式: https://cdn.bsky.app/img/feed_fullsize/plain/{did}/{cid}@{format}
+	return fmt.Sprintf("https://cdn.bsky.app/img/feed_fullsize/plain/%s/%s@%s", did, cidStr, ext)
 }
 
 // CARブロックからメディアURLを抽出
@@ -389,7 +405,6 @@ func (m *BlueskyProvider) extractMediaURLsFromCAR(repo string, blocks []byte) []
 		return urls
 	}
 
-	blockCount := 0
 	// 各ブロックを読み込み
 	for {
 		block, err := reader.Next()
@@ -400,7 +415,6 @@ func (m *BlueskyProvider) extractMediaURLsFromCAR(repo string, blocks []byte) []
 			logger.Debugf("Error reading CAR block: %v", err)
 			break
 		}
-		blockCount++
 
 		// ブロックデータをCBORとしてデコード
 		var record map[string]interface{}
@@ -414,17 +428,9 @@ func (m *BlueskyProvider) extractMediaURLsFromCAR(repo string, blocks []byte) []
 			continue
 		}
 
-		logger.Debugf("CAR block record type: %s", recordType)
-
 		// 投稿またはメディア関連のレコードからblobを抽出
 		switch recordType {
 		case "app.bsky.feed.post":
-			// embedフィールドの存在を確認（デバッグ用）
-			if embed, ok := record["embed"]; ok {
-				if embedMap := toStringMap(embed); embedMap != nil {
-					logger.Debugf("Post has embed: %+v", formatMapWithStrings(embedMap))
-				}
-			}
 			urls = append(urls, m.extractBlobsFromPost(repo, record)...)
 		case "app.bsky.actor.profile":
 			urls = append(urls, m.extractBlobsFromProfile(repo, record)...)
@@ -455,25 +461,25 @@ func (m *BlueskyProvider) extractBlobsFromPost(repo string, record map[string]in
 				if imgMap == nil {
 					continue
 				}
-				blobRef := extractBlobRef(imgMap["image"])
+				blobRef, mimeType := extractBlobInfo(imgMap["image"])
 				if blobRef != "" {
-					urls = append(urls, buildBlobURL(repo, blobRef))
+					urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 				}
 			}
 		}
 	case "app.bsky.embed.video":
 		// 動画埋め込み
-		blobRef := extractBlobRef(embed["video"])
+		blobRef, mimeType := extractBlobInfo(embed["video"])
 		if blobRef != "" {
-			urls = append(urls, buildBlobURL(repo, blobRef))
+			urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 		}
 	case "app.bsky.embed.external":
 		// 外部リンク埋め込み（サムネイル）
 		external := toStringMap(embed["external"])
 		if external != nil {
-			blobRef := extractBlobRef(external["thumb"])
+			blobRef, mimeType := extractBlobInfo(external["thumb"])
 			if blobRef != "" {
-				urls = append(urls, buildBlobURL(repo, blobRef))
+				urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 			}
 		}
 	case "app.bsky.embed.recordWithMedia":
@@ -489,9 +495,9 @@ func (m *BlueskyProvider) extractBlobsFromPost(repo string, record map[string]in
 						if imgMap == nil {
 							continue
 						}
-						blobRef := extractBlobRef(imgMap["image"])
+						blobRef, mimeType := extractBlobInfo(imgMap["image"])
 						if blobRef != "" {
-							urls = append(urls, buildBlobURL(repo, blobRef))
+							urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 						}
 					}
 				}
@@ -507,40 +513,42 @@ func (m *BlueskyProvider) extractBlobsFromProfile(repo string, record map[string
 	var urls []string
 
 	// アバター
-	blobRef := extractBlobRef(record["avatar"])
+	blobRef, mimeType := extractBlobInfo(record["avatar"])
 	if blobRef != "" {
-		urls = append(urls, buildBlobURL(repo, blobRef))
+		urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 	}
 
 	// バナー
-	blobRef = extractBlobRef(record["banner"])
+	blobRef, mimeType = extractBlobInfo(record["banner"])
 	if blobRef != "" {
-		urls = append(urls, buildBlobURL(repo, blobRef))
+		urls = append(urls, buildBlobURL(repo, blobRef, mimeType))
 	}
 
 	return urls
 }
 
-// Blob参照からCID文字列を抽出
-func extractBlobRef(v interface{}) string {
+// Blob参照からCID文字列とmimeTypeを抽出
+func extractBlobInfo(v interface{}) (string, string) {
 	if v == nil {
-		return ""
+		return "", ""
 	}
 
 	blob := toStringMap(v)
 	if blob == nil {
-		return ""
+		return "", ""
 	}
+
+	// mimeTypeを取得
+	mimeType, _ := blob["mimeType"].(string)
 
 	// refフィールドを取得
 	refVal := blob["ref"]
 	if refVal == nil {
-		return ""
+		return "", mimeType
 	}
 
 	// CBORタグ42（CIDリンク）として来る場合
 	if refTag, ok := refVal.(cbor.Tag); ok {
-		logger.Debugf("Found CID tag: Number=%d", refTag.Number)
 		if refTag.Number == 42 { // Tag 42 = CID
 			if content, ok := refTag.Content.([]byte); ok {
 				// CIDバイト列の先頭バイト(0x00)をスキップ
@@ -553,9 +561,8 @@ func extractBlobRef(v interface{}) string {
 					_, parsed, err = cid.CidFromBytes(content)
 				}
 				if err == nil {
-					return parsed.String()
+					return parsed.String(), mimeType
 				}
-				logger.Debugf("Failed to parse CID from tag content: %v", err)
 			}
 		}
 	}
@@ -564,13 +571,13 @@ func extractBlobRef(v interface{}) string {
 	ref := toStringMap(refVal)
 	if ref != nil {
 		if link, ok := ref["$link"].(string); ok {
-			return link
+			return link, mimeType
 		}
 		// $linkがbyte配列の場合
 		if linkBytes, ok := ref["$link"].([]byte); ok {
 			_, parsed, err := cid.CidFromBytes(linkBytes)
 			if err == nil {
-				return parsed.String()
+				return parsed.String(), mimeType
 			}
 		}
 		// $linkがCBORタグの場合
@@ -578,13 +585,13 @@ func extractBlobRef(v interface{}) string {
 			if content, ok := linkTag.Content.([]byte); ok {
 				_, parsed, err := cid.CidFromBytes(content)
 				if err == nil {
-					return parsed.String()
+					return parsed.String(), mimeType
 				}
 			}
 		}
 	}
 
-	return ""
+	return "", mimeType
 }
 
 // map[interface{}]interface{}をmap[string]interface{}に変換するヘルパー関数
