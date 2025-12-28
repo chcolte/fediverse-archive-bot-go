@@ -36,7 +36,7 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 
 		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
 			logger.Errorf("Failed to download %s: %v", item.URL, err)
-			// dlqueue <- item //リキューするなら，上限を設ける仕組みがないとスタック
+			// dlqueue <- item //リキューするなら，回数上限を設ける仕組みがないとスタック
 		}
 	}
 }
@@ -54,6 +54,9 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 		return &httpError{status: resp.StatusCode}
 	}
 
+	// Get Content-Type header
+	contentType := resp.Header.Get("Content-Type")
+
 	// Read file content
 	buffer, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -63,14 +66,14 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	// Create date-based directory structure
 	dateStr := datetime.Format("2006-01-02")
 	dailyDir := filepath.Join(downloadDir, dateStr)
-	assetsDir := filepath.Join(dailyDir, "data", "assets")
+	assetsDir := filepath.Join(dailyDir, "assets")
 
 	if err := os.MkdirAll(assetsDir, 0755); err != nil {
 		return err
 	}
 
 	// Determine file name
-	filename := determineFileName(fileURL, buffer)
+	filename := determineFileName(fileURL, buffer, contentType)
 
 	// Save file
 	fileDownloadPathFull := filepath.Join(assetsDir, filename)
@@ -79,8 +82,8 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	}
 
 	// Save metadata (今は決め打ち)
-	fileDownloadPathRelative := filepath.Join("data", "assets", filename)
-	metadataSavePath := filepath.Join(dailyDir, "data", "filename_url_mapping.jsonl")
+	fileDownloadPathRelative := filepath.Join(assetsDir, filename)
+	metadataSavePath := filepath.Join(dailyDir, "filename_url_mapping.jsonl")
 	return writeFileNameURLMapping(fileURL, fileDownloadPathRelative, time.Now().UTC().Format(time.RFC3339), metadataSavePath)
 }
 
@@ -113,26 +116,68 @@ func writeFileNameURLMapping(fileURL, filepath string, downloadtime string, save
 	return err
 }
 
-// determineFileName determines the file name based on URL and file hash
-func determineFileName(fileURL string, filebinary []byte) string {
+// determineFileName determines the file name based on Content-Type and URL
+func determineFileName(fileURL string, filebinary []byte, contentType string) string {
 	hash := getFileHash(filebinary)
 
-	parsedURL, err := url.Parse(fileURL)
-	if err != nil {
-		return hash
+	// まずContent-Typeから拡張子を決定
+	ext := extFromContentType(contentType)
+	
+	// Content-Typeから取れない場合はURLから推測
+	if ext == "" {
+		parsedURL, err := url.Parse(fileURL)
+		if err == nil {
+			// URLのクエリパラメータにつく"?"が%3fとエンコードされてしまっているURLを渡された際に，
+			// 拡張子が，適切でなくなることを事前に弾く
+			urlPath := parsedURL.Path
+			if idx := strings.Index(urlPath, "?"); idx != -1 {
+				urlPath = urlPath[:idx]
+			}
+			ext = path.Ext(urlPath)
+		}
 	}
-
-	// URLのクエリパラメータにつく"?"が%3fとエンコードされてしまっているURLを渡された際に，
-	// 拡張子が，適切でなくなることを事前に弾く
-	// ex. https://proxy.misskeyusercontent.jp/avatar/media.misskeyusercontent.jp%2Fio%2Fwebpublic-4864c051-a66f-45e5-ae46-33416947992e.webp%3Fsensitive%3Dtrue?avatar=1
-	// ex. data/assets/e50059a61aa27bc3bfa53631eb15fa4683a62e2d420eebe7134da67ff707b0ed.webp?sensitive=true
-    urlPath := parsedURL.Path
-    if idx := strings.Index(urlPath, "?"); idx != -1 {
-        urlPath = urlPath[:idx]
-    }
-
-	ext := path.Ext(urlPath)
+	
 	return hash + ext
+}
+
+// extFromContentType returns file extension from Content-Type header
+func extFromContentType(contentType string) string {
+	// Content-Type: image/jpeg; charset=utf-8 のような形式を処理
+	if idx := strings.Index(contentType, ";"); idx != -1 {
+		contentType = contentType[:idx]
+	}
+	contentType = strings.TrimSpace(contentType)
+
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/avif":
+		return ".avif"
+	case "image/svg+xml":
+		return ".svg"
+	case "video/mp4":
+		return ".mp4"
+	case "video/webm":
+		return ".webm"
+	case "video/quicktime":
+		return ".mov"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/ogg":
+		return ".ogg"
+	case "audio/wav":
+		return ".wav"
+	case "application/pdf":
+		return ".pdf"
+	default:
+		return ""
+	}
 }
 
 // getFileHash calculates SHA256 hash of the binary data
