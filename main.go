@@ -62,12 +62,14 @@ func main() {
 	// WebSocket接続
 	if err := provider.Connect(); err != nil {
 		logger.Error("Failed to connect:", err)
+		os.Exit(1)
 	}
 	defer provider.Close()
 	
 	// チャネル接続
 	if err := provider.ConnectChannel(); err != nil {
 		logger.Error("Failed to connect channel:", err)
+		os.Exit(1)
 	}
 
 	// メッセージ受信を開始
@@ -139,7 +141,7 @@ func main() {
 func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
-	logger.Info("Fediverse Archive Bot v0.2.0-beta")
+	logger.Info("Fediverse Archive Bot v0.2.1-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
 	logger.Info("- Target System:      ", system)
 	logger.Info("- Mode:               ", mode)
