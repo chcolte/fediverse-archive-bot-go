@@ -183,7 +183,6 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 			if len(commit.Blocks) > 0 {
 				mediaURLs := m.extractMediaURLsFromCAR(commit.Repo, commit.Blocks)
 				for _, url := range mediaURLs {
-					logger.Infof("Found media URL: %s", url)
 					output <- models.DownloadItem{
 						URL:      url,
 						Datetime: now,
