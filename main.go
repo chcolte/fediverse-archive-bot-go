@@ -97,9 +97,9 @@ func main() {
 	}()
 	
 	// ダウンローダーを開始
-	wg.Add(1)
 	if (media) {
 		for i := 0; i < parallelDownload; i++ {
+			wg.Add(1)
 			go MediaDownloader(dlqueue, &wg, downloadDir)
 		}
 	}else{

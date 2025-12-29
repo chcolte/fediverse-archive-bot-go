@@ -46,6 +46,7 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	// Download file
 	resp, err := http.Get(fileURL)
 	if err != nil {
+		logger.Debugf("Failed to http Get: %s", fileURL)
 		return err
 	}
 	defer resp.Body.Close()
@@ -60,6 +61,7 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	// Read file content
 	buffer, err := io.ReadAll(resp.Body)
 	if err != nil {
+		logger.Debugf("Failed to io.ReadAll: %s", fileURL)
 		return err
 	}
 
