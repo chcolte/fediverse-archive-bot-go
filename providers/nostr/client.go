@@ -75,6 +75,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 		return err
 	}
 
+	afterEOSE := false
 	for {
 		var rawMsg string
 		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
@@ -85,7 +86,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 
 
 		msg, _ := unmarshalJSON([]byte(rawMsg))
-		if (msg.Type == "EVENT") {
+		if (msg.Type == "EVENT" && afterEOSE) {
 			logger.Debug("Parsed message: ", msg.Event.CreatedAt)
 
 			//日毎ディレクトリを作成(なければ)
@@ -115,9 +116,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 
 		}else if(msg.Type == "EOSE"){
 			logger.Info("Received End of Stored Events. The real-time stream is being acquired.")
-			
-		}else{
-			logger.Info("Parsed message: ", msg.Type)
+			afterEOSE = true
 		}
 	}
 }
