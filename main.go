@@ -132,8 +132,8 @@ func main() {
 	logger.Info("Closed download queue.")
 
 	// 全てのワーカーが終了するのを待つ
-	wg.Wait()
-	logger.Info("All workers finished")
+	// wg.Wait() //これしちゃうと，dlqueueにURLが送られてくるときにパニックを起こすまで止まらない
+	// logger.Info("All workers finished")
 }
 
 func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
