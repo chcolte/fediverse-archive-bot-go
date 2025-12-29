@@ -117,7 +117,11 @@ func main() {
 
 	<-quit // シグナル待ち
 	logger.Info("Shutting down...")
-	
+
+	// WebSocket接続を閉じる
+	// TODO: fix: L77で結局Reconnectしてしまう
+	provider.Close()
+	logger.Info("Closed provider connection")
 
 	// 未処理のURLを保存する
 	savePendingURLs(dlqueue)
@@ -125,7 +129,11 @@ func main() {
 
 	// チャネルを閉じてワーカーを停止させる
 	close(dlqueue)
-	logger.Info("Closed download queue")
+	logger.Info("Closed download queue.")
+
+	// 全てのワーカーが終了するのを待つ
+	wg.Wait()
+	logger.Info("All workers finished")
 }
 
 func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
