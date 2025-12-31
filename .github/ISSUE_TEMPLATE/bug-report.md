@@ -2,13 +2,15 @@
 name: Bug report
 about: Bug report template
 title: 'Bug: '
-labels: ''
+labels: bug
 assignees: ''
 
 ---
 
-### ソフトウェアバージョン
-- 
+### 実行環境
+- OS             : 
+- version     : 
+- command:  
 
 ### 発生現象
 - 
