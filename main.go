@@ -16,6 +16,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 
 	// for debug 
 	// "net/http"
@@ -53,6 +54,9 @@ func main() {
 		
 		case "bluesky":
 			provider = bluesky.NewBlueskyProvider(url, downloadDir)
+		
+		case "mastodon":
+			provider = mastodon.NewMastodonProvider(url, timeline, downloadDir)
 
 		default:
 			logger.Error("Invalid system specified")
