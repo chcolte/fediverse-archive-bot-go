@@ -5,18 +5,19 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
+	//"os/signal"
+	//"sync"
+	//"syscall"
+	//"time"
 
+	"github.com/chcolte/fediverse-archive-bot-go/crawlManager"
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	"github.com/chcolte/fediverse-archive-bot-go/providers"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
+	// "github.com/chcolte/fediverse-archive-bot-go/providers"
+	// "github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
+	// "github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	// "github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
+	// "github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 
 	// for debug 
 	// "net/http"
@@ -37,109 +38,117 @@ func main() {
 
 	logger.SetVerbose(verbose)
 
-	// ダウンロードキューを準備
-	dlqueue := make(chan models.DownloadItem, 100)
-	//loadPendingURLs(dlqueue) // なぜか動かすと，スタックする
-
-	var wg sync.WaitGroup
-
-	// システムの選択
-	var provider providers.PlatformProvider
-	switch system {
-		case "misskey":
-			provider = misskey.NewMisskeyProvider(url, timeline, downloadDir)
-
-		case "nostr":
-			provider = nostr.NewNostrProvider(url, downloadDir)
-		
-		case "bluesky":
-			provider = bluesky.NewBlueskyProvider(url, downloadDir)
-		
-		case "mastodon":
-			provider = mastodon.NewMastodonProvider(url, timeline, downloadDir)
-
-		default:
-			logger.Error("Invalid system specified")
-			os.Exit(1)
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload)
+	cm.NewServerReceiver <- crawlManager.ServerInfo{
+		Type: system,
+		URL: url,
+		Timeline: timeline,
 	}
+	cm.Start()
 
-	// WebSocket接続
-	if err := provider.Connect(); err != nil {
-		logger.Error("Failed to connect:", err)
-		os.Exit(1)
-	}
-	defer provider.Close()
+	// // ダウンロードキューを準備
+	// dlqueue := make(chan models.DownloadItem, 100)
+	// //loadPendingURLs(dlqueue) // なぜか動かすと，スタックする
+
+	// var wg sync.WaitGroup
+
+	// // システムの選択
+	// var provider providers.PlatformProvider
+	// switch system {
+	// 	case "misskey":
+	// 		provider = misskey.NewMisskeyProvider(url, timeline, downloadDir)
+
+	// 	case "nostr":
+	// 		provider = nostr.NewNostrProvider(url, downloadDir)
+		
+	// 	case "bluesky":
+	// 		provider = bluesky.NewBlueskyProvider(url, downloadDir)
+		
+	// 	case "mastodon":
+	// 		provider = mastodon.NewMastodonProvider(url, timeline, downloadDir)
+
+	// 	default:
+	// 		logger.Error("Invalid system specified")
+	// 		os.Exit(1)
+	// }
+
+	// // WebSocket接続
+	// if err := provider.Connect(); err != nil {
+	// 	logger.Error("Failed to connect:", err)
+	// 	os.Exit(1)
+	// }
+	// defer provider.Close()
 	
-	// チャネル接続
-	if err := provider.ConnectChannel(); err != nil {
-		logger.Error("Failed to connect channel:", err)
-		os.Exit(1)
-	}
+	// // チャネル接続
+	// if err := provider.ConnectChannel(); err != nil {
+	// 	logger.Error("Failed to connect channel:", err)
+	// 	os.Exit(1)
+	// }
 
-	// メッセージ受信を開始
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			if err := provider.ReceiveMessages(dlqueue); err != nil {
-				logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds...", err)
-				time.Sleep(5 * time.Second)
+	// // メッセージ受信を開始
+	// wg.Add(1)
+	// go func() {
+	// 	defer wg.Done()
+	// 	for {
+	// 		if err := provider.ReceiveMessages(dlqueue); err != nil {
+	// 			logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds...", err)
+	// 			time.Sleep(5 * time.Second)
 				
-				// 再接続
-				provider.Close()
-				if err := provider.Connect(); err != nil {
-					logger.Errorf("Reconnect failed: %v. Retrying...", err)
-					continue
-				}
-				if err := provider.ConnectChannel(); err != nil {
-					logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
-					continue
-				}
-				logger.Info("Reconnected successfully")
-				continue
-			}
-			break
-		}
-	}()
+	// 			// 再接続
+	// 			provider.Close()
+	// 			if err := provider.Connect(); err != nil {
+	// 				logger.Errorf("Reconnect failed: %v. Retrying...", err)
+	// 				continue
+	// 			}
+	// 			if err := provider.ConnectChannel(); err != nil {
+	// 				logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
+	// 				continue
+	// 			}
+	// 			logger.Info("Reconnected successfully")
+	// 			continue
+	// 		}
+	// 		break
+	// 	}
+	// }()
 	
-	// ダウンローダーを開始
-	if (media) {
-		for i := 0; i < parallelDownload; i++ {
-			wg.Add(1)
-			go MediaDownloader(dlqueue, &wg, downloadDir)
-		}
-	}else{
-		go func(){
-			defer wg.Done()
-			for item := range dlqueue {
-				logger.Debug("Discarding item:", item)
-			}
-		}()
-	}
+	// // ダウンローダーを開始
+	// if (media) {
+	// 	for i := 0; i < parallelDownload; i++ {
+	// 		wg.Add(1)
+	// 		go MediaDownloader(dlqueue, &wg, downloadDir)
+	// 	}
+	// }else{
+	// 	go func(){
+	// 		defer wg.Done()
+	// 		for item := range dlqueue {
+	// 			logger.Debug("Discarding item:", item)
+	// 		}
+	// 	}()
+	// }
 
-	// シグナルハンドリング
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	// // シグナルハンドリング
+	// quit := make(chan os.Signal, 1)
+	// signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	<-quit // シグナル待ち
-	logger.Info("Shutting down...")
+	// <-quit // シグナル待ち
+	// logger.Info("Shutting down...")
 
-	// WebSocket接続を閉じる
-	// TODO: fix: L77で結局Reconnectしてしまう
-	provider.Close()
-	logger.Info("Closed provider connection")
+	// // WebSocket接続を閉じる
+	// // TODO: fix: L77で結局Reconnectしてしまう
+	// provider.Close()
+	// logger.Info("Closed provider connection")
 
-	// 未処理のURLを保存する
-	savePendingURLs(dlqueue)
-	logger.Info("Saved pending URLs to file")
+	// // 未処理のURLを保存する
+	// savePendingURLs(dlqueue)
+	// logger.Info("Saved pending URLs to file")
 
-	// チャネルを閉じてワーカーを停止させる
-	close(dlqueue)
-	logger.Info("Closed download queue.")
+	// // チャネルを閉じてワーカーを停止させる
+	// close(dlqueue)
+	// logger.Info("Closed download queue.")
 
-	// 全てのワーカーが終了するのを待つ
-	// wg.Wait() //これしちゃうと，dlqueueにURLが送られてくるときにパニックを起こすまで止まらない
-	// logger.Info("All workers finished")
+	// // 全てのワーカーが終了するのを待つ
+	// // wg.Wait() //これしちゃうと，dlqueueにURLが送られてくるときにパニックを起こすまで止まらない
+	// // logger.Info("All workers finished")
 }
 
 func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {

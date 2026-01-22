@@ -1,4 +1,4 @@
-package main
+package mediaDownloader
 
 import (
 	"crypto/sha256"
