@@ -123,6 +123,15 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 	}
 }
 
+
+func (m *MastodonProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+	logger.Info("MastodonProvider: Starting to crawl new servers")
+	for {
+		// TODO: implement
+	}
+}
+
+
 // WebSocket 接続を閉じる
 func (m *MastodonProvider) Close() error {
 	if m.ws != nil {

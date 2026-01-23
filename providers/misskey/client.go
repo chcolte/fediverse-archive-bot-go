@@ -37,7 +37,7 @@ func (m *MisskeyProvider) Connect() error {
 		return err
 	}
 	m.ws = ws
-	logger.Info("Connected to ", wsURL+"/streaming")
+	logger.Debug("Connected to ", wsURL+"/streaming")
 	return nil
 }
 
@@ -61,13 +61,13 @@ func (m *MisskeyProvider) ConnectChannel() error {
 		return err
 	}
 
-	logger.Info("Connected to channel:", m.Timeline)
+	logger.Debug("Connected to channel:", m.Timeline)
 	return nil
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
 func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
-	logger.Info("MisskeyProvider: Starting to receive messages")
+	logger.Info("MisskeyProvider: Starting to receive messages [", m.URL, "]")
 	
 	// ルートダウンロードディレクトリを作成
 	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
@@ -91,15 +91,13 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 		// 日毎ディレクトリを作成(なければ)
 		dateStr := note.CreatedAt.Format("2006-01-02")
 		dailyDir := filepath.Join(m.DownloadDir, dateStr)
-		assetsDir := filepath.Join(dailyDir, "data")
-
-		if err := os.MkdirAll(assetsDir, 0755); err != nil {
-			logger.Errorf("Failed to create dailydownload directory: %v", err)
-			continue
+		if err := os.MkdirAll(dailyDir, 0755); err != nil {
+			logger.Errorf("Failed to create daily directory: %v", err)
+			return err
 		}
 
 		// 受信した生メッセージを保存
-		JSONSavePath := filepath.Join(dailyDir, "data", dateStr+".jsonl")
+		JSONSavePath := filepath.Join(dailyDir, dateStr+".jsonl")
 		m.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
@@ -111,6 +109,29 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 				URL:      url,
 				Datetime: note.CreatedAt,
 			}
+		}
+	}
+}
+
+func (m *MisskeyProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+	logger.Info("MisskeyProvider: Starting to crawl new servers [", m.URL, "]")
+	for {
+		// メッセージを受信
+		var rawMsg string
+		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
+			logger.Errorf("MisskeyProvider: Receive error: %v", err)
+			return err
+		}
+
+		// メッセージをパース
+		msg := m.parseStreamingMessage(rawMsg)
+		note := m.getNoteFromStreamingMessage(msg)
+
+		// サーバーを通知
+		if note.User.Host == "null" || note.User.Host == "" {continue} // Host: nullの場合は他サーバーではない
+		server <- models.ServerInfo{
+			Type: note.User.Instance.SoftwareName,
+			URL: note.User.Host,
 		}
 	}
 }

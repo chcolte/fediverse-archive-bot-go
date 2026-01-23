@@ -121,6 +121,14 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 	}
 }
 
+func (m *NostrProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+	logger.Info("NostrProvider: Starting to crawl new servers")
+	for {
+		// TODO: implement
+	}
+}
+
+
 // WebSocket接続を閉じる
 func (m *NostrProvider) Close() error {
 	

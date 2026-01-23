@@ -217,6 +217,15 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 	}
 }
 
+
+func (m *BlueskyProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+	logger.Info("BlueskyProvider: Starting to crawl new servers")
+	for {
+		// TODO: implement
+	}
+}
+
+
 // マップからCommitPayloadを作成
 func parseCommitPayload(m map[string]interface{}) *CommitPayload {
 	commit := &CommitPayload{}

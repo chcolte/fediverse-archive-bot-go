@@ -14,3 +14,15 @@ type FilenameURLMapping struct {
 	URL          string `json:"url"`
 	Downloadtime string `json:"downloadtime"`
 }
+
+// サーバーの基本情報
+type ServerInfo struct {
+	Type string // bluesky, mastodon, misskey, nostr
+	URL string // baseURL
+}
+
+// サーバータイムラインの基本情報
+type ServerTLInfo struct{
+	ServerInfo
+	Timeline string // timeline name
+}

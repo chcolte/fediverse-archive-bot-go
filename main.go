@@ -39,10 +39,9 @@ func main() {
 	logger.SetVerbose(verbose)
 
 	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload)
-	cm.NewServerReceiver <- crawlManager.ServerInfo{
+	cm.NewServerReceiver <- models.ServerInfo{
 		Type: system,
 		URL: url,
-		Timeline: timeline,
 	}
 	cm.Start()
 
