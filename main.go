@@ -20,17 +20,17 @@ import (
 	// "github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 
 	// for debug 
-	// "net/http"
-	// _ "net/http/pprof"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 func main() {
 
 	// for debug
-	// go func() {
-	// 	log.Println("pprof server listening on :6060")
-	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
-	// }()
+	go func() {
+		logger.Info("pprof server listening on :6060")
+		logger.Info(http.ListenAndServe("localhost:6060", nil))
+	}()
 	
 
 	system, mode, url, timeline, downloadDir, verbose, media, parallelDownload := readFlags()
@@ -39,7 +39,7 @@ func main() {
 	logger.SetVerbose(verbose)
 
 	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload)
-	cm.NewServerReceiver <- models.ServerInfo{
+	cm.NewServerReceiver <- models.Server{
 		Type: system,
 		URL: url,
 	}

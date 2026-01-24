@@ -121,7 +121,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 	}
 }
 
-func (m *NostrProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+func (m *NostrProvider) CrawlNewServer(server chan <- models.Server) error {
 	logger.Info("NostrProvider: Starting to crawl new servers")
 	return nil
 	// for {

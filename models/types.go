@@ -16,13 +16,13 @@ type FilenameURLMapping struct {
 }
 
 // サーバーの基本情報
-type ServerInfo struct {
+type Server struct {
 	Type string // bluesky, mastodon, misskey, nostr
-	URL string // baseURL
+	URL  string // baseURL
 }
 
-// サーバータイムラインの基本情報
-type ServerTLInfo struct{
-	ServerInfo
+// 監視対象（サーバー × タイムライン）
+type Target struct {
+	Server   Server
 	Timeline string // timeline name
 }

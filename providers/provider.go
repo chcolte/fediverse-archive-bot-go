@@ -7,6 +7,6 @@ type PlatformProvider interface {
 	Connect() error
 	ConnectChannel() error
 	ReceiveMessages(output chan<- models.DownloadItem) error
-	CrawlNewServer(server chan <- models.ServerInfo) error
+	CrawlNewServer(server chan <- models.Server) error
 	Close() error
 }

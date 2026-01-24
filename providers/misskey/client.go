@@ -113,7 +113,7 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 	}
 }
 
-func (m *MisskeyProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
+func (m *MisskeyProvider) CrawlNewServer(server chan <- models.Server) error {
 	logger.Info("MisskeyProvider: Starting to crawl new servers [", m.URL, "]")
 	for {
 		// メッセージを受信
@@ -129,7 +129,7 @@ func (m *MisskeyProvider) CrawlNewServer(server chan <- models.ServerInfo) error
 
 		// サーバーを通知
 		if note.User.Host == "null" || note.User.Host == "" {continue} // Host: nullの場合は他サーバーではない
-		server <- models.ServerInfo{
+		server <- models.Server{
 			Type: note.User.Instance.SoftwareName,
 			URL: note.User.Host,
 		}
