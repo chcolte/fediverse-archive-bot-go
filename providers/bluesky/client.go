@@ -220,9 +220,10 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 
 func (m *BlueskyProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
 	logger.Info("BlueskyProvider: Starting to crawl new servers")
-	for {
-		// TODO: implement
-	}
+	return nil
+	// for {
+	// TODO: implement
+	// }
 }
 
 

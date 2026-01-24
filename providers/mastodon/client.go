@@ -126,9 +126,11 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 
 func (m *MastodonProvider) CrawlNewServer(server chan <- models.ServerInfo) error {
 	logger.Info("MastodonProvider: Starting to crawl new servers")
-	for {
-		// TODO: implement
-	}
+	
+	return nil
+	// for {
+	// TODO: implement
+	// }
 }
 
 
