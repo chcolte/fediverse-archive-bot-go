@@ -52,6 +52,7 @@ type CrawlManager struct {
 	NewServerReceiver chan models.Server // 新規サーバー受付チャネル
 	ArchiverRegistry  map[string]*Archiver
 	ExplorerRegistry  map[string]*Explorer
+	KnownServers      map[string]models.Server
 	RegistryLock      sync.RWMutex
 
 	DownloadDir      string
@@ -65,6 +66,7 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
 		ExplorerRegistry:  make(map[string]*Explorer),
+		KnownServers:      make(map[string]models.Server),
 		RegistryLock:      sync.RWMutex{},
 		DownloadDir:       downloadDir,
 		Mode:              mode,
@@ -77,16 +79,19 @@ func makeRegistryKey(target models.Target) string {
 	return target.Server.URL + ":" + target.Timeline
 }
 
+// MEMO: ここの中で重複排除するべき？同じサイトでArchiverを更新したくなることはある？
 func (c *CrawlManager) registerArchiver(archiver *Archiver) {
 	c.RegistryLock.Lock()
 	defer c.RegistryLock.Unlock()
 	c.ArchiverRegistry[makeRegistryKey(archiver.Conn.Target)] = archiver
+	logger.Debugf("Added archiver for %s (%s)", archiver.Conn.Target.Server.URL, archiver.Conn.Target.Timeline)
 }
 
 func (c *CrawlManager) registerExplorer(explorer *Explorer) {
 	c.RegistryLock.Lock()
 	defer c.RegistryLock.Unlock()
 	c.ExplorerRegistry[makeRegistryKey(explorer.Conn.Target)] = explorer
+	logger.Debugf("Added explorer for %s (%s)", explorer.Conn.Target.Server.URL, explorer.Conn.Target.Timeline)
 }
 
 func (c *CrawlManager) archiverExists(target models.Target) bool {
@@ -96,40 +101,62 @@ func (c *CrawlManager) archiverExists(target models.Target) bool {
 	return exists
 }
 
+func (c *CrawlManager) explorerExists(target models.Target) bool {
+	c.RegistryLock.RLock()
+	defer c.RegistryLock.RUnlock()
+	_, exists := c.ExplorerRegistry[makeRegistryKey(target)]
+	return exists
+}
+
+func (c *CrawlManager) isObservedServer(server models.Server) bool { // FIXME: すべてのTimelineパターンに対してチェックする
+	return c.archiverExists(models.Target{Server: server, Timeline: "localTimeline"}) ||
+		c.explorerExists(models.Target{Server: server, Timeline: "globalTimeline"})
+}
+
+func (c *CrawlManager) isKnownServer(server models.Server) bool {
+	c.RegistryLock.RLock()
+	defer c.RegistryLock.RUnlock()
+	_, exists := c.KnownServers[server.URL]
+	return exists
+}
+
 func (c *CrawlManager) Start() {
 	for server := range c.NewServerReceiver {
 		logger.Debug("Received new server: ", server)
 
-		// Archiver用のターゲット
+		// サーバーリストを更新
+		if !c.isKnownServer(server) {
+			serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
+			c.AppendToFile(server.URL, serverListPath)
+
+			c.RegistryLock.Lock()
+			c.KnownServers[server.URL] = server
+			c.RegistryLock.Unlock()
+		}
+
+		// ------------Archiver--------------
 		archiverTarget := models.Target{
 			Server:   server,
 			Timeline: "localTimeline", // FIXME: for misskey only now
 		}
 
-		// 重複チェック
-		if c.archiverExists(archiverTarget) {
-			continue
-		}
-		logger.Debug("Adding server to registry: ", server)
-
-		// Archiverの接続を作成
 		archiverConn, err := c.createConnection(archiverTarget)
 		if err != nil {
 			logger.Error("Failed to create archiver connection: ", err)
 			continue
 		}
 
-		// Archiverを作成
+		// 重複チェック
+		if c.archiverExists(archiverTarget) {
+			continue
+		}
+
 		archiver := &Archiver{
 			Conn:    archiverConn,
 			DLQueue: make(chan models.DownloadItem, 100),
 			WG:      &sync.WaitGroup{},
 		}
 		c.registerArchiver(archiver)
-
-		// サーバーリストを更新
-		serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
-		c.AppendToFile(server.URL, serverListPath)
 
 		// Archiverを開始
 		c.startArchiver(archiver)
@@ -146,6 +173,11 @@ func (c *CrawlManager) Start() {
 			continue
 		}
 
+		// 重複チェック
+		if c.explorerExists(explorerTarget) {
+			continue
+		}
+
 		explorer := &Explorer{
 			Conn:        explorerConn,
 			ServerQueue: c.NewServerReceiver,
@@ -156,7 +188,6 @@ func (c *CrawlManager) Start() {
 		// Explorerを開始
 		c.startExplorer(explorer)
 
-		logger.Info("Server added to registry: ", server.URL)
 	}
 }
 
@@ -302,10 +333,17 @@ func (c *CrawlManager) startExplorer(explorer *Explorer) {
 	}()
 }
 
-func (c *CrawlManager) AppendToFile(text string, filepath string) {
-	file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+func (c *CrawlManager) AppendToFile(text string, filePath string) {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		logger.Errorf("Failed to create directory: %v", err)
+		return
+	}
+
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		logger.Errorf("Failed to open file: %v", err)
+		return
 	}
 	defer file.Close()
 	fmt.Fprintln(file, text)
