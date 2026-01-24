@@ -120,19 +120,25 @@ func (c *CrawlManager) isKnownServer(server models.Server) bool {
 	return exists
 }
 
+func (c *CrawlManager) addKnownServer(server models.Server) {
+	c.RegistryLock.Lock()
+	c.KnownServers[server.URL] = server
+	c.RegistryLock.Unlock()
+
+	serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
+	c.AppendToFile(server.URL, serverListPath)
+}
+
 func (c *CrawlManager) Start() {
 	for server := range c.NewServerReceiver {
-		logger.Debug("Received new server: ", server)
-
 		// サーバーリストを更新
-		if !c.isKnownServer(server) {
-			serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
-			c.AppendToFile(server.URL, serverListPath)
-
-			c.RegistryLock.Lock()
-			c.KnownServers[server.URL] = server
-			c.RegistryLock.Unlock()
+		if c.isKnownServer(server) {
+			continue
+		}else{
+			c.addKnownServer(server)
 		}
+
+		logger.Debug("Received new server: ", server)
 
 		// ------------Archiver--------------
 		archiverTarget := models.Target{
