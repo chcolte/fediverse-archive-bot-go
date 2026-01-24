@@ -5,6 +5,8 @@ import (
 	"time"
 	"errors"
 	"path/filepath"
+	"os"
+	"fmt"
 
 	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
@@ -122,7 +124,11 @@ func (c *CrawlManager) Start() {
 			continue
 		}
 
+		// add server to registry
 		c.addServerToRegistry(serverManager)
+		// update server list
+		ServerListPath := filepath.Join(c.DownloadDir, serverInfo.Type, "server_list.txt")
+		c.AppendToFile(serverInfo.URL, ServerListPath)
 
 		// start archiver
 		archiveManager := ArchiverManager{
@@ -283,4 +289,13 @@ func (c *CrawlManager) startTLExplorer(serverManager ExplorerManager) {
 		}
 	}()
 
+}
+
+func (c *CrawlManager) AppendToFile(text string, filepath string) {
+    file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+    if err != nil {
+        logger.Errorf("Failed to open file: %v", err)
+    }
+    defer file.Close()
+    fmt.Fprintln(file, text) //書き込み
 }
