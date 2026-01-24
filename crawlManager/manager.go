@@ -62,7 +62,7 @@ type CrawlManager struct {
 
 func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int) *CrawlManager {
 	return &CrawlManager{
-		NewServerReceiver: make(chan models.Server, 10),
+		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
 		ExplorerRegistry:  make(map[string]*Explorer),
 		RegistryLock:      sync.RWMutex{},

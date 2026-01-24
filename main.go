@@ -33,16 +33,30 @@ func main() {
 	}()
 	
 
-	system, mode, url, timeline, downloadDir, verbose, media, parallelDownload := readFlags()
+	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload := readFlags()
 	startMessage(system, mode, url, timeline, downloadDir, media)
 
 	logger.SetVerbose(verbose)
 
 	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload)
-	cm.NewServerReceiver <- models.Server{
-		Type: system,
-		URL: url,
+
+	// set target servers
+	var serverList []string
+	if serverListPath != "" {
+		serverList = readServerList(serverListPath)
 	}
+	if url != "" {
+		serverList = append(serverList, url) 
+	}
+
+	for _, server := range serverList {
+		cm.NewServerReceiver <- models.Server{
+			Type: system,
+			URL: server,
+		}
+	}
+	
+	// start crawler
 	cm.Start()
 
 	// // ダウンロードキューを準備
@@ -164,11 +178,12 @@ func startMessage(system string, mode string, url string, timeline string, downl
 	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, string, string, bool, bool, int) {
+func readFlags() (string, string, string, string, string, string, bool, bool, int) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
 		u = flag.String("u", "", "server URL. (e.g. https://misskey.io)")
+		a = flag.String("a", "", "server URL list. (Max 100 servers) (e.g. ./server_urls.txt)")
 		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
 		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
@@ -176,7 +191,26 @@ func readFlags() (string, string, string, string, string, bool, bool, int) {
 		P = flag.Int("parallel-download", 1, "Number of Media Downloaders")
 	)
 	flag.Parse()
-	return *s, *m, *u, *t, *d, *v, *M, *P
+	return *s, *m, *u, *a, *t, *d, *v, *M, *P
+}
+
+func readServerList(serverpath string) []string {
+	file, err := os.Open(serverpath)
+	if err != nil {
+		logger.Errorf("Failed to open %s: %v", serverpath, err)
+		return nil
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var urls []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line != "" {
+			urls = append(urls, line)
+		}
+	}
+	return urls
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {

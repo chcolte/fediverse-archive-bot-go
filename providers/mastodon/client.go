@@ -86,10 +86,10 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 		msg := m.parseStreamingMessage(rawMsg)
 		if(msg.Event == "update"){
 			payload := m.getPayloadFromStreamingMessage(msg)
-			logger.Info("Received message: ", msg.Event)
-			logger.Info("Received message: ", payload.ID)
-			logger.Info("Received message: ", payload.CreatedAt)
-			logger.Info("Received message: ", payload.URL)
+			logger.Debug("Received message: ", msg.Event)
+			logger.Debug("Received message: ", payload.ID)
+			logger.Debug("Received message: ", payload.CreatedAt)
+			logger.Debug("Received message: ", payload.URL)
 			dateStr = payload.CreatedAt.Format("2006-01-02")
 			
 		}else if(msg.Event == "delete"){
