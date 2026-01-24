@@ -222,10 +222,10 @@ func (c *CrawlManager) startTLArchiver(serverManager ArchiverManager) {
 				logger.Info("Reconnected successfully")
 
 				// TODO: ダウンタイムの間のポストをREST APIで取得する処理
-				
-				continue
+
+			}else{
+				break
 			}
-			break
 		}
 	}()
 
@@ -282,10 +282,10 @@ func (c *CrawlManager) startTLExplorer(serverManager ExplorerManager) {
 				logger.Info("Reconnected successfully")
 
 				// TODO: ダウンタイムの間のポストをREST APIで取得する処理
-				
-				continue
+
+			}else{
+				break
 			}
-			break
 		}
 	}()
 
