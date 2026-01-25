@@ -128,7 +128,7 @@ func (c *CrawlManager) addKnownServer(server models.Server) {
 	c.RegistryLock.Unlock()
 
 	serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
-	c.AppendToFile(server.URL, serverListPath)
+	c.AppendToFile(server.URL+" "+server.Type, serverListPath)
 }
 
 func (c *CrawlManager) Start() {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"strings"
+	"log"
 	//"os/signal"
 	//"sync"
 	//"syscall"
@@ -34,19 +36,17 @@ func main() {
 	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, autoFollow)
 
 	// set target servers
-	var serverList []string
-	if serverListPath != "" {
-		serverList = readServerList(serverListPath)
+	serverList := readServerList(serverListPath)
+		
+	if url != "" && system != "" {
+		serverList = append(serverList, models.Server{
+			Type: system, 
+			URL: url,
+		})
 	}
-	if url != "" {
-		serverList = append(serverList, url) 
-	}
-
+		
 	for _, server := range serverList {
-		cm.NewServerReceiver <- models.Server{
-			Type: system, // TODO: systemフラグからではなく，serverListのテキストにシステム名を書くように修正する
-			URL: server,
-		}
+		cm.NewServerReceiver <- server
 	}
 	
 	startMessage(mode, serverList, timeline, downloadDir, media, autoFollow)
@@ -79,7 +79,7 @@ func main() {
 	// // logger.Info("All workers finished")
 }
 
-func startMessage(mode string, serverList []string, timeline string, downloadDir string, media bool, unbounded bool) {
+func startMessage(mode string, serverList []models.Server, timeline string, downloadDir string, media bool, unbounded bool) {
 	scope := "server"
 	if unbounded {
 		scope = "unbounded"
@@ -96,6 +96,7 @@ func startMessage(mode string, serverList []string, timeline string, downloadDir
 	logger.Info("- Download Directory: ", downloadDir)
 	logger.Info("- Scope:              ", scope)
 	logger.Info("---------------------------------------------------")
+	logger.SetFlags(log.LstdFlags)
 }
 
 func readFlags() (string, string, string, string, string, string, bool, bool, int, bool) {
@@ -115,7 +116,7 @@ func readFlags() (string, string, string, string, string, string, bool, bool, in
 	return *s, *m, *u, *a, *t, *d, *v, *M, *P, *U
 }
 
-func readServerList(serverpath string) []string {
+func readServerList(serverpath string) []models.Server {
 	file, err := os.Open(serverpath)
 	if err != nil {
 		logger.Errorf("Failed to open %s: %v", serverpath, err)
@@ -123,15 +124,22 @@ func readServerList(serverpath string) []string {
 	}
 	defer file.Close()
 
+	var servers []models.Server
 	scanner := bufio.NewScanner(file)
-	var urls []string
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line != "" {
-			urls = append(urls, line)
+		if(len(strings.Fields(line)) != 2) {
+			logger.Errorf("Invalid server line: %s", line)
+			continue
 		}
+
+		server := models.Server{
+			Type: strings.Fields(line)[1],
+			URL: strings.Fields(line)[0],
+		}
+		servers = append(servers, server)
 	}
-	return urls
+	return servers
 }
 
 func loadPendingURLs(dlqueue chan models.DownloadItem) {
