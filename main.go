@@ -20,25 +20,23 @@ import (
 	// "github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 
 	// for debug 
-	"net/http"
-	_ "net/http/pprof"
+	// "net/http"
+	// _ "net/http/pprof"
 )
 
 func main() {
 
 	// for debug
-	go func() {
-		logger.Info("pprof server listening on :6060")
-		logger.Info(http.ListenAndServe("localhost:6060", nil))
-	}()
+	// go func() {
+	// 	logger.Info("pprof server listening on :6060")
+	// 	logger.Info(http.ListenAndServe("localhost:6060", nil))
+	// }()
 	
 
-	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload := readFlags()
-	startMessage(system, mode, url, timeline, downloadDir, media)
-
+	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload, autoFollow := readFlags()
 	logger.SetVerbose(verbose)
 
-	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload)
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, autoFollow)
 
 	// set target servers
 	var serverList []string
@@ -56,6 +54,8 @@ func main() {
 		}
 	}
 	
+	startMessage(mode, serverList, timeline, downloadDir, media, autoFollow)
+
 	// start crawler
 	cm.Start()
 
@@ -164,21 +164,26 @@ func main() {
 	// // logger.Info("All workers finished")
 }
 
-func startMessage(system string, mode string, url string, timeline string, downloadDir string, media bool) {
+func startMessage(mode string, serverList []string, timeline string, downloadDir string, media bool, unbounded bool) {
+	scope := "server"
+	if unbounded {
+		scope = "unbounded"
+	}
+
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
 	logger.Info("Fediverse Archive Bot v0.2.1-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
-	logger.Info("- Target System:      ", system)
 	logger.Info("- Mode:               ", mode)
-	logger.Info("- URL:                ", url)
-	logger.Info("- Timeline:           ", timeline)
+	logger.Info("- Seed Servers:       ", serverList)
+	logger.Info("- Target Timeline:    ", timeline)
 	logger.Info("- Download media:     ", media)
 	logger.Info("- Download Directory: ", downloadDir)
+	logger.Info("- Scope:              ", scope)
 	logger.Info("---------------------------------------------------")
 }
 
-func readFlags() (string, string, string, string, string, string, bool, bool, int) {
+func readFlags() (string, string, string, string, string, string, bool, bool, int, bool) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
@@ -189,9 +194,10 @@ func readFlags() (string, string, string, string, string, string, bool, bool, in
 		v = flag.Bool("V", false, "verbose output")
 		M = flag.Bool("media", false, "download media files")
 		P = flag.Int("parallel-download", 1, "Number of Media Downloaders")
+		U = flag.Bool("unbounded", false, "unbounded scope: crawl all discovered servers")
 	)
 	flag.Parse()
-	return *s, *m, *u, *a, *t, *d, *v, *M, *P
+	return *s, *m, *u, *a, *t, *d, *v, *M, *P, *U
 }
 
 func readServerList(serverpath string) []string {

@@ -59,9 +59,10 @@ type CrawlManager struct {
 	Mode             string // live, past
 	Media            bool
 	ParallelDownload int
+	AutoFollow       bool
 }
 
-func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int) *CrawlManager {
+func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, autoFollow bool) *CrawlManager {
 	return &CrawlManager{
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
@@ -72,6 +73,7 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		Mode:              mode,
 		Media:             media,
 		ParallelDownload:  parallelDownload,
+		AutoFollow:        autoFollow,
 	}
 }
 
@@ -168,32 +170,33 @@ func (c *CrawlManager) Start() {
 		c.startArchiver(archiver)
 
 		// ------------Explorer--------------
-		explorerTarget := models.Target{
-			Server:   server,
-			Timeline: "globalTimeline", // FIXME: for misskey only now
+		if c.AutoFollow {
+			explorerTarget := models.Target{
+				Server:   server,
+				Timeline: "globalTimeline", // FIXME: for misskey only now
+			}
+
+			explorerConn, err := c.createConnection(explorerTarget)
+			if err != nil {
+				logger.Error("Failed to create explorer connection: ", err)
+				continue
+			}
+
+			// 重複チェック
+			if c.explorerExists(explorerTarget) {
+				continue
+			}
+
+			explorer := &Explorer{
+				Conn:        explorerConn,
+				ServerQueue: c.NewServerReceiver,
+				WG:          &sync.WaitGroup{},
+			}
+			c.registerExplorer(explorer)
+
+			// Explorerを開始
+			c.startExplorer(explorer)
 		}
-
-		explorerConn, err := c.createConnection(explorerTarget)
-		if err != nil {
-			logger.Error("Failed to create explorer connection: ", err)
-			continue
-		}
-
-		// 重複チェック
-		if c.explorerExists(explorerTarget) {
-			continue
-		}
-
-		explorer := &Explorer{
-			Conn:        explorerConn,
-			ServerQueue: c.NewServerReceiver,
-			WG:          &sync.WaitGroup{},
-		}
-		c.registerExplorer(explorer)
-
-		// Explorerを開始
-		c.startExplorer(explorer)
-
 	}
 }
 
@@ -254,20 +257,20 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 		defer conn.Provider.Close()
 		for {
 			if err := conn.Provider.ReceiveMessages(archiver.DLQueue); err != nil {
-				logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds...", err)
+				logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds... [%s]", err, conn.Target.Server.URL)
 				time.Sleep(5 * time.Second)
 
 				// 再接続
 				conn.Provider.Close()
 				if err := conn.Provider.Connect(); err != nil {
-					logger.Errorf("Reconnect failed: %v. Retrying...", err)
+					logger.Errorf("Reconnect failed: %v. Retrying... [%s]", err, conn.Target.Server.URL)
 					continue
 				}
 				if err := conn.Provider.ConnectChannel(); err != nil {
-					logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
+					logger.Errorf("ReconnectChannel failed: %v. Retrying... [%s]", err, conn.Target.Server.URL)
 					continue
 				}
-				logger.Info("Reconnected successfully")
+				logger.Infof("Reconnected successfully [%s]", conn.Target.Server.URL)
 
 				// TODO: ダウンタイムの間のポストをREST APIで取得する処理
 
