@@ -13,11 +13,6 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/crawlManager"
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	// "github.com/chcolte/fediverse-archive-bot-go/providers"
-	// "github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
-	// "github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
-	// "github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
-	// "github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 
 	// for debug 
 	// "net/http"
@@ -59,86 +54,6 @@ func main() {
 	// start crawler
 	cm.Start()
 
-	// // ダウンロードキューを準備
-	// dlqueue := make(chan models.DownloadItem, 100)
-	// //loadPendingURLs(dlqueue) // なぜか動かすと，スタックする
-
-	// var wg sync.WaitGroup
-
-	// // システムの選択
-	// var provider providers.PlatformProvider
-	// switch system {
-	// 	case "misskey":
-	// 		provider = misskey.NewMisskeyProvider(url, timeline, downloadDir)
-
-	// 	case "nostr":
-	// 		provider = nostr.NewNostrProvider(url, downloadDir)
-		
-	// 	case "bluesky":
-	// 		provider = bluesky.NewBlueskyProvider(url, downloadDir)
-		
-	// 	case "mastodon":
-	// 		provider = mastodon.NewMastodonProvider(url, timeline, downloadDir)
-
-	// 	default:
-	// 		logger.Error("Invalid system specified")
-	// 		os.Exit(1)
-	// }
-
-	// // WebSocket接続
-	// if err := provider.Connect(); err != nil {
-	// 	logger.Error("Failed to connect:", err)
-	// 	os.Exit(1)
-	// }
-	// defer provider.Close()
-	
-	// // チャネル接続
-	// if err := provider.ConnectChannel(); err != nil {
-	// 	logger.Error("Failed to connect channel:", err)
-	// 	os.Exit(1)
-	// }
-
-	// // メッセージ受信を開始
-	// wg.Add(1)
-	// go func() {
-	// 	defer wg.Done()
-	// 	for {
-	// 		if err := provider.ReceiveMessages(dlqueue); err != nil {
-	// 			logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds...", err)
-	// 			time.Sleep(5 * time.Second)
-				
-	// 			// 再接続
-	// 			provider.Close()
-	// 			if err := provider.Connect(); err != nil {
-	// 				logger.Errorf("Reconnect failed: %v. Retrying...", err)
-	// 				continue
-	// 			}
-	// 			if err := provider.ConnectChannel(); err != nil {
-	// 				logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
-	// 				continue
-	// 			}
-	// 			logger.Info("Reconnected successfully")
-	// 			continue
-	// 		}
-	// 		break
-	// 	}
-	// }()
-	
-	// // ダウンローダーを開始
-	// if (media) {
-	// 	for i := 0; i < parallelDownload; i++ {
-	// 		wg.Add(1)
-	// 		go MediaDownloader(dlqueue, &wg, downloadDir)
-	// 	}
-	// }else{
-	// 	go func(){
-	// 		defer wg.Done()
-	// 		for item := range dlqueue {
-	// 			logger.Debug("Discarding item:", item)
-	// 		}
-	// 	}()
-	// }
-
 	// // シグナルハンドリング
 	// quit := make(chan os.Signal, 1)
 	// signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
@@ -172,7 +87,7 @@ func startMessage(mode string, serverList []string, timeline string, downloadDir
 
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
-	logger.Info("Fediverse Archive Bot v0.2.1-beta")
+	logger.Info("Fediverse Archive Bot v0.3.0-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
 	logger.Info("- Mode:               ", mode)
 	logger.Info("- Seed Servers:       ", serverList)
