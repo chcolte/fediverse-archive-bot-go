@@ -44,7 +44,7 @@ func main() {
 
 	for _, server := range serverList {
 		cm.NewServerReceiver <- models.Server{
-			Type: system,
+			Type: system, // TODO: systemフラグからではなく，serverListのテキストにシステム名を書くように修正する
 			URL: server,
 		}
 	}

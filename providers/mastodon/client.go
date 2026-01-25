@@ -83,9 +83,10 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 
 		// メッセージをパース
 		dateStr := ""
+		var payload Payload
 		msg := m.parseStreamingMessage(rawMsg)
 		if(msg.Event == "update"){
-			payload := m.getPayloadFromStreamingMessage(msg)
+			payload = m.getPayloadFromStreamingMessage(msg)
 			logger.Debug("Received message: ", msg.Event)
 			logger.Debug("Received message: ", payload.ID)
 			logger.Debug("Received message: ", payload.CreatedAt)
@@ -111,15 +112,16 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 		m.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
+		urls := m.extractMediaURLsFromPayload(payload)
 		
 
 		// URLをDLキューに送信
-		// for _, url := range urls {
-		// 	output <- models.DownloadItem{
-		// 		URL:      url,
-		// 		Datetime: note.CreatedAt,
-		// 	}
-		// }
+		for _, url := range urls {
+			output <- models.DownloadItem{
+				URL:      url,
+				Datetime: payload.CreatedAt,
+			}
+		}
 	}
 }
 
@@ -171,6 +173,33 @@ func (m *MastodonProvider) getPayloadFromStreamingMessage(msg StreamingMessage) 
 	return payload
 }
 
+func (m *MastodonProvider) extractMediaURLsFromPayload(payload Payload) []string {
+	var urls []string
+
+	for _, attachment := range payload.MediaAttachments {
+		urls = append(urls, attachment.URL)
+		urls = append(urls, attachment.PreviewURL) //?
+		urls = append(urls, attachment.RemoteURL) // ?
+		urls = append(urls, attachment.TextURL) //?
+	}
+	for _, emoji := range payload.Emojis {
+		urls = append(urls, emoji.URL)
+		urls = append(urls, emoji.StaticURL)
+	}
+	for _, emoji := range payload.Account.Emojis {
+		urls = append(urls, emoji.URL)
+		urls = append(urls, emoji.StaticURL)
+	}
+	urls = append(urls, payload.Account.Avatar)
+	urls = append(urls, payload.Account.AvatarStatic)
+	urls = append(urls, payload.Account.Header)
+	urls = append(urls, payload.Account.HeaderStatic)
+	for _, emoji := range payload.Poll.Emojis {
+		urls = append(urls, emoji.URL)
+		urls = append(urls, emoji.StaticURL)
+	}
+	return urls
+}
 
 // urlAdjust は URL を WebSocket 用に変換する
 func urlAdjust(url string) (ws string, http string) {
