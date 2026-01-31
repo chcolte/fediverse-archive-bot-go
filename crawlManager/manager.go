@@ -59,10 +59,10 @@ type CrawlManager struct {
 	Mode             string // live, past
 	Media            bool
 	ParallelDownload int
-	AutoFollow       bool
+    Scope string
 }
 
-func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, autoFollow bool) *CrawlManager {
+func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string) *CrawlManager {
 	return &CrawlManager{
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
@@ -73,7 +73,7 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		Mode:              mode,
 		Media:             media,
 		ParallelDownload:  parallelDownload,
-		AutoFollow:        autoFollow,
+		Scope: scope,
 	}
 }
 
@@ -140,6 +140,11 @@ func (c *CrawlManager) Start() {
 			c.addKnownServer(server)
 		}
 
+		// Scope: system名の除外処理だけココでやろうとしてるから，変なことになってる。
+		if (c.Scope != "unbounded" && c.Scope != "server" && c.Scope != server.Type) {
+			continue
+		}
+
 		logger.Debug("Received new server: ", server)
 
 		// ------------Archiver--------------
@@ -170,20 +175,25 @@ func (c *CrawlManager) Start() {
 		c.startArchiver(archiver)
 
 		// ------------Explorer--------------
-		if c.AutoFollow {
+		var explore = true;
+		if c.Scope == "server"{
+			explore = false;
+		}
+
+		if explore {
 			explorerTarget := models.Target{
 				Server:   server,
 				Timeline: "globalTimeline", // FIXME: for misskey only now
 			}
 
+			// 重複チェック
+			if c.explorerExists(explorerTarget) {
+				continue
+			}
+		
 			explorerConn, err := c.createConnection(explorerTarget)
 			if err != nil {
 				logger.Error("Failed to create explorer connection: ", err)
-				continue
-			}
-
-			// 重複チェック
-			if c.explorerExists(explorerTarget) {
 				continue
 			}
 

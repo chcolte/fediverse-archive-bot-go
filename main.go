@@ -30,13 +30,16 @@ func main() {
 	// }()
 	
 
-	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload, autoFollow := readFlags()
+	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload, scope := readFlags()
 	logger.SetVerbose(verbose)
 
-	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, autoFollow)
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope)
 
 	// set target servers
-	serverList := readServerList(serverListPath)
+	var serverList []models.Server;
+	if serverListPath != "" {
+		serverList = readServerList(serverListPath)
+	}
 		
 	if url != "" && system != "" {
 		serverList = append(serverList, models.Server{
@@ -49,7 +52,7 @@ func main() {
 		cm.NewServerReceiver <- server
 	}
 	
-	startMessage(mode, serverList, timeline, downloadDir, media, autoFollow)
+	startMessage(mode, serverList, timeline, downloadDir, media, scope)
 
 	// start crawler
 	cm.Start()
@@ -79,12 +82,7 @@ func main() {
 	// // logger.Info("All workers finished")
 }
 
-func startMessage(mode string, serverList []models.Server, timeline string, downloadDir string, media bool, unbounded bool) {
-	scope := "server"
-	if unbounded {
-		scope = "unbounded"
-	}
-
+func startMessage(mode string, serverList []models.Server, timeline string, downloadDir string, media bool, scope string) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
 	logger.Info("Fediverse Archive Bot v0.3.0-beta")
@@ -99,7 +97,7 @@ func startMessage(mode string, serverList []models.Server, timeline string, down
 	logger.SetFlags(log.LstdFlags)
 }
 
-func readFlags() (string, string, string, string, string, string, bool, bool, int, bool) {
+func readFlags() (string, string, string, string, string, string, bool, bool, int, string) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
@@ -110,10 +108,10 @@ func readFlags() (string, string, string, string, string, string, bool, bool, in
 		v = flag.Bool("V", false, "verbose output")
 		M = flag.Bool("media", false, "download media files")
 		P = flag.Int("parallel-download", 1, "Number of Media Downloaders")
-		U = flag.Bool("unbounded", false, "unbounded scope: crawl all discovered servers")
+		S = flag.String("Scope", "server", "scope (e.g. unbounded, server, misskey, mastodon, nostr, bluesky)")
 	)
 	flag.Parse()
-	return *s, *m, *u, *a, *t, *d, *v, *M, *P, *U
+	return *s, *m, *u, *a, *t, *d, *v, *M, *P, *S
 }
 
 func readServerList(serverpath string) []models.Server {
