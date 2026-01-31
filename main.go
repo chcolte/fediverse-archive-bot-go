@@ -91,7 +91,7 @@ func main() {
 func startMessage(mode string, serverList []models.Server, timelines []string, downloadDir string, media bool, scope string) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
-	logger.Info("Fediverse Archive Bot v0.3.0-beta")
+	logger.Info("Fediverse Archive Bot v0.3.1-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
 	logger.Info("- Mode:               ", mode)
 	logger.Info("- Seed Servers:       ", serverList)
