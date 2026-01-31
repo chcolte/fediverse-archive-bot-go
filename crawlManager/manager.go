@@ -60,10 +60,10 @@ type CrawlManager struct {
 	Media            bool
 	ParallelDownload int
 	Scope            string
-	Timeline         string // 共通タイムライン名 (local / global)
+	Timelines        []string // 共通タイムライン名のリスト (local, global)
 }
 
-func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string, timeline string) *CrawlManager {
+func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string, timelines []string) *CrawlManager {
 	return &CrawlManager{
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
@@ -75,7 +75,7 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		Media:             media,
 		ParallelDownload:  parallelDownload,
 		Scope:             scope,
-		Timeline:          timeline,
+		Timelines:         timelines,
 	}
 }
 
@@ -113,8 +113,13 @@ func (c *CrawlManager) explorerExists(target models.Target) bool {
 }
 
 func (c *CrawlManager) isObservedServer(server models.Server) bool {
-	return c.archiverExists(models.Target{Server: server, Timeline: c.Timeline}) ||
-		c.explorerExists(models.Target{Server: server, Timeline: models.TimelineGlobal})
+	// 全てのタイムラインに対してチェック
+	for _, tl := range c.Timelines {
+		if c.archiverExists(models.Target{Server: server, Timeline: tl}) {
+			return true
+		}
+	}
+	return c.explorerExists(models.Target{Server: server, Timeline: models.TimelineGlobal})
 }
 
 func (c *CrawlManager) isKnownServer(server models.Server) bool {
@@ -150,31 +155,34 @@ func (c *CrawlManager) Start() {
 		logger.Debug("Received new server: ", server)
 
 		// ------------Archiver--------------
-		archiverTarget := models.Target{
-			Server:   server,
-			Timeline: c.Timeline,
-		}
+		// 各タイムラインに対してArchiverを作成
+		for _, timeline := range c.Timelines {
+			archiverTarget := models.Target{
+				Server:   server,
+				Timeline: timeline,
+			}
 
-		archiverConn, err := c.createConnection(archiverTarget)
-		if err != nil {
-			logger.Error("Failed to create archiver connection: ", err)
-			continue
-		}
+			// 重複チェック
+			if c.archiverExists(archiverTarget) {
+				continue
+			}
 
-		// 重複チェック
-		if c.archiverExists(archiverTarget) {
-			continue
-		}
+			archiverConn, err := c.createConnection(archiverTarget)
+			if err != nil {
+				logger.Errorf("Failed to create archiver connection for %s (%s): %v", server.URL, timeline, err)
+				continue
+			}
 
-		archiver := &Archiver{
-			Conn:    archiverConn,
-			DLQueue: make(chan models.DownloadItem, 100),
-			WG:      &sync.WaitGroup{},
-		}
-		c.registerArchiver(archiver)
+			archiver := &Archiver{
+				Conn:    archiverConn,
+				DLQueue: make(chan models.DownloadItem, 100),
+				WG:      &sync.WaitGroup{},
+			}
+			c.registerArchiver(archiver)
 
-		// Archiverを開始
-		c.startArchiver(archiver)
+			// Archiverを開始
+			c.startArchiver(archiver)
+		}
 
 		// ------------Explorer--------------
 		var explore = true;

@@ -30,10 +30,16 @@ func main() {
 	// }()
 	
 
-	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload, scope := readFlags()
+	system, mode, url, serverListPath, timelineStr, downloadDir, verbose, media, parallelDownload, scope := readFlags()
 	logger.SetVerbose(verbose)
 
-	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope, timeline)
+	// カンマ区切りのタイムラインを配列に変換
+	timelines := strings.Split(timelineStr, ",")
+	for i := range timelines {
+		timelines[i] = strings.TrimSpace(timelines[i])
+	}
+
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope, timelines)
 
 	// set target servers
 	var serverList []models.Server;
@@ -52,7 +58,7 @@ func main() {
 		cm.NewServerReceiver <- server
 	}
 	
-	startMessage(mode, serverList, timeline, downloadDir, media, scope)
+	startMessage(mode, serverList, timelines, downloadDir, media, scope)
 
 	// start crawler
 	cm.Start()
@@ -82,14 +88,14 @@ func main() {
 	// // logger.Info("All workers finished")
 }
 
-func startMessage(mode string, serverList []models.Server, timeline string, downloadDir string, media bool, scope string) {
+func startMessage(mode string, serverList []models.Server, timelines []string, downloadDir string, media bool, scope string) {
 	logger.SetFlags(0)
 	logger.Info("---------------------------------------------------")
 	logger.Info("Fediverse Archive Bot v0.3.0-beta")
 	logger.Info("https://github.com/chcolte/fediverse-archive-bot-go")
 	logger.Info("- Mode:               ", mode)
 	logger.Info("- Seed Servers:       ", serverList)
-	logger.Info("- Target Timeline:    ", timeline)
+	logger.Info("- Target Timelines:   ", timelines)
 	logger.Info("- Download media:     ", media)
 	logger.Info("- Download Directory: ", downloadDir)
 	logger.Info("- Scope:              ", scope)
