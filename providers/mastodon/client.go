@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"fmt"
 	"time"
+	"net/url"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
 	"golang.org/x/net/websocket"
 )
 
@@ -40,21 +42,49 @@ func (m *MastodonProvider) Connect() error {
 
 	streamURL := wsURL + "/api/v1/streaming/?stream=" + tl
 
-	config, err := websocket.NewConfig(streamURL, httpURL)
-	if err != nil {
-		return err
+	// まず認証なしで接続を試みる
+	ws, err := m.tryConnect(streamURL, httpURL, "")
+	if err == nil {
+		m.ws = ws
+		logger.Info("Connected to ", streamURL, " (no auth)")
+		return nil
+	}
+	
+	logger.Debugf("Connection without auth failed for %s: %v, trying with token...", m.URL, err)
+
+	// 認証なしで失敗した場合、トークン付きでリトライ
+	accessToken, tokenErr := GetAccessToken(m.URL)
+	if tokenErr != nil {
+		logger.Errorf("Failed to get access token for %s: %v", m.URL, tokenErr)
+		return err // 元のエラーを返す
 	}
 
-	// User-Agentを設定（設定しないとなんかブロックされる）
-	config.Header.Set("User-Agent", "Mozilla/5.0 (compatible; FediverseArchiveBot/1.0)")
-
-	ws, err := websocket.DialConfig(config)
+	ws, err = m.tryConnect(streamURL+"&access_token="+accessToken, httpURL, accessToken)
 	if err != nil {
-		return err
+		return fmt.Errorf("connection failed both with and without auth: %w", err)
 	}
+
 	m.ws = ws
-	logger.Info("Connected to ", streamURL)
+	logger.Info("Connected to ", streamURL, " (with token)")
 	return nil
+}
+
+// tryConnect attempts to establish a WebSocket connection
+func (m *MastodonProvider) tryConnect(streamURL, origin, token string) (*websocket.Conn, error) {
+	config, err := websocket.NewConfig(streamURL, origin)
+	if err != nil {
+		return nil, err
+	}
+
+	// User-Agentを設定
+	config.Header.Set("User-Agent", "Mozilla/5.0 (compatible; FediverseArchiveBot/1.0)")
+	
+	// トークンがある場合はヘッダーにも設定
+	if token != "" {
+		config.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	return websocket.DialConfig(config)
 }
 
 // 指定されたタイムラインチャンネルに接続 (WebSocket接続時にすでに接続済み)
@@ -127,12 +157,40 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 
 
 func (m *MastodonProvider) CrawlNewServer(server chan <- models.Server) error {
-	logger.Info("MastodonProvider: Starting to crawl new servers")
-	
+	logger.Info("MastodonProvider: Starting to crawl new servers [", m.URL, "]")
+	for {
+		// メッセージを受信
+		var rawMsg string
+		if err := websocket.Message.Receive(m.ws, &rawMsg); err != nil {
+			logger.Errorf("MastodonProvider: Receive error: %v", err)
+			return err
+		}
+
+		// メッセージをパース
+		msg := m.parseStreamingMessage(rawMsg)
+		if(msg.Event != "update") {continue}
+		payload := m.getPayloadFromStreamingMessage(msg)
+
+		// サーバーを通知
+		u, err := url.Parse(payload.URL)
+		if err != nil {
+			logger.Errorf("Failed to parse URL: %v", err)
+			continue
+		}
+		
+		if u.Host != m.URL {
+			softwareName, err := nodeinfo.GetSoftwareName(u.Host)
+			if err != nil {
+				logger.Errorf("Failed to get software name: %v", err)
+				continue
+			}
+			server <- models.Server{
+				Type: softwareName,
+				URL: u.Host,
+			}
+		}
+	}
 	return nil
-	// for {
-	// TODO: implement
-	// }
 }
 
 
