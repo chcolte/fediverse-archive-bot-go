@@ -59,10 +59,11 @@ type CrawlManager struct {
 	Mode             string // live, past
 	Media            bool
 	ParallelDownload int
-    Scope string
+	Scope            string
+	Timeline         string // 共通タイムライン名 (local / global)
 }
 
-func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string) *CrawlManager {
+func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string, timeline string) *CrawlManager {
 	return &CrawlManager{
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
@@ -73,7 +74,8 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		Mode:              mode,
 		Media:             media,
 		ParallelDownload:  parallelDownload,
-		Scope: scope,
+		Scope:             scope,
+		Timeline:          timeline,
 	}
 }
 
@@ -110,9 +112,9 @@ func (c *CrawlManager) explorerExists(target models.Target) bool {
 	return exists
 }
 
-func (c *CrawlManager) isObservedServer(server models.Server) bool { // FIXME: すべてのTimelineパターンに対してチェックする
-	return c.archiverExists(models.Target{Server: server, Timeline: "localTimeline"}) ||
-		c.explorerExists(models.Target{Server: server, Timeline: "globalTimeline"})
+func (c *CrawlManager) isObservedServer(server models.Server) bool {
+	return c.archiverExists(models.Target{Server: server, Timeline: c.Timeline}) ||
+		c.explorerExists(models.Target{Server: server, Timeline: models.TimelineGlobal})
 }
 
 func (c *CrawlManager) isKnownServer(server models.Server) bool {
@@ -150,7 +152,7 @@ func (c *CrawlManager) Start() {
 		// ------------Archiver--------------
 		archiverTarget := models.Target{
 			Server:   server,
-			Timeline: "localTimeline", // FIXME: for misskey only now
+			Timeline: c.Timeline,
 		}
 
 		archiverConn, err := c.createConnection(archiverTarget)
@@ -183,7 +185,7 @@ func (c *CrawlManager) Start() {
 		if explore {
 			explorerTarget := models.Target{
 				Server:   server,
-				Timeline: "globalTimeline", // FIXME: for misskey only now
+				Timeline: models.TimelineGlobal,
 			}
 
 			// 重複チェック

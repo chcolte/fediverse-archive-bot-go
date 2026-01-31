@@ -33,7 +33,7 @@ func main() {
 	system, mode, url, serverListPath, timeline, downloadDir, verbose, media, parallelDownload, scope := readFlags()
 	logger.SetVerbose(verbose)
 
-	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope)
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope, timeline)
 
 	// set target servers
 	var serverList []models.Server;
@@ -103,7 +103,7 @@ func readFlags() (string, string, string, string, string, string, bool, bool, in
 		m = flag.String("m", "live", "archive mode.(currently live only)")
 		u = flag.String("u", "", "server URL. (e.g. https://misskey.io)")
 		a = flag.String("a", "", "server URL list. (Max 100 servers) (e.g. ./server_urls.txt)")
-		t = flag.String("t", "localTimeline", "(Misskey only) timeline (e.g localTimeline, globalTimeline)")
+		t = flag.String("t", "local", "timeline to archive (local, global)")
 		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
 		M = flag.Bool("media", false, "download media files")

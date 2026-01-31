@@ -48,10 +48,12 @@ func (m *MisskeyProvider) ConnectChannel() error {
 		return err
 	}
 
+	channel := m.convertTimeline()
+
 	msg := `{
 		"type": "connect",
 		"body": {
-			"channel": "` + m.Timeline + `",
+			"channel": "` + channel + `",
 			"id": "` + id.String() + `"
 		}
 	}`
@@ -61,7 +63,7 @@ func (m *MisskeyProvider) ConnectChannel() error {
 		return err
 	}
 
-	logger.Debug("Connected to channel:", m.Timeline)
+	logger.Debug("Connected to channel:", channel)
 	return nil
 }
 
@@ -97,7 +99,7 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 		}
 
 		// 受信した生メッセージを保存
-		JSONSavePath := filepath.Join(dailyDir, dateStr+".jsonl")
+		JSONSavePath := filepath.Join(dailyDir, dateStr+"_"+m.Timeline+".jsonl")
 		m.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
@@ -184,4 +186,17 @@ func urlAdjust(url string) (ws string, http string) {
 		return strings.Replace(url, "ws://", "http://", -1), url
 	}
 	return "wss://" + url, "https://" + url
+}
+
+// convertTimeline は共通タイムライン名をMisskey用に変換する
+func (m *MisskeyProvider) convertTimeline() string {
+	switch m.Timeline {
+	case models.TimelineLocal, "localTimeline": // 後方互換性のため旧名も対応
+		return "localTimeline"
+	case models.TimelineGlobal, "globalTimeline":
+		return "globalTimeline"
+	default:
+		// デフォルトはローカルTL
+		return "localTimeline"
+	}
 }
