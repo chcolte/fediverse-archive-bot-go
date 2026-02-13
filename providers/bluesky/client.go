@@ -15,6 +15,7 @@ import (
 	"github.com/ipld/go-car/v2"
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 )
 
@@ -173,7 +174,7 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 			if err != nil {
 				logger.Errorf("Failed to marshal metadata: %v", err)
 			} else {
-				m.AppendToFile(string(metadataJSON), jsonlPath)
+				providers.AppendToFile(string(metadataJSON), jsonlPath)
 			}
 
 			// ログ出力
@@ -209,7 +210,7 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 			if err != nil {
 				logger.Errorf("Failed to marshal metadata: %v", err)
 			} else {
-				m.AppendToFile(string(metadataJSON), jsonlPath)
+				providers.AppendToFile(string(metadataJSON), jsonlPath)
 			}
 
 			logger.Debugf("Saved %s message seq=%d", messageType, seq)
@@ -325,17 +326,6 @@ func isPrintable(data []byte) bool {
 	}
 	return len(data) > 0
 }
-
-// 受信した生JSONをJson line形式で書き出す
-func (m *BlueskyProvider) AppendToFile(text string, filepath string) {
-    file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-    if err != nil {
-        logger.Errorf("Failed to open file: %v", err)
-    }
-    defer file.Close()
-    fmt.Fprintln(file, text) //書き込み
-}
-
 
 // URLを変換
 func urlAdjust(url string) (ws string, http string) {

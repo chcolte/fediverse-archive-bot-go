@@ -5,10 +5,10 @@ import (
 	"strings"
 	"os"
 	"path/filepath"
-	"fmt"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 )
@@ -100,7 +100,7 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 
 		// 受信した生メッセージを保存
 		JSONSavePath := filepath.Join(dailyDir, dateStr+"_"+m.Timeline+".jsonl")
-		m.AppendToFile(rawMsg, JSONSavePath)
+		providers.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
 		urls := SafeExtractURL(note)
@@ -145,17 +145,6 @@ func (m *MisskeyProvider) Close() error {
 	}
 	return nil
 }
-
-// 受信した生JSONをJson line形式で書き出す
-func (m *MisskeyProvider) AppendToFile(text string, filepath string) {
-    file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-    if err != nil {
-        logger.Errorf("Failed to open file: %v", err)
-    }
-    defer file.Close()
-    fmt.Fprintln(file, text) //書き込み
-}
-
 
 func (m *MisskeyProvider) parseStreamingMessage(raw string) StreamingMessage {
 	var msg StreamingMessage

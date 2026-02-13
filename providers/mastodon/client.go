@@ -12,6 +12,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
+	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 )
 
@@ -136,7 +137,7 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 
 		//受信した生メッセージを保存
 		JSONSavePath := filepath.Join(dailyDir, dateStr+"_"+m.Timeline+".jsonl")
-		m.AppendToFile(rawMsg, JSONSavePath)
+		providers.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
 		urls := m.extractMediaURLsFromPayload(payload)
@@ -197,16 +198,6 @@ func (m *MastodonProvider) Close() error {
 		return m.ws.Close()
 	}
 	return nil
-}
-
-// 受信した生JSONをJson line形式で書き出す
-func (m *MastodonProvider) AppendToFile(text string, filepath string) {
-    file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-    if err != nil {
-        logger.Errorf("Failed to open file: %v", err)
-    }
-    defer file.Close()
-    fmt.Fprintln(file, text) //書き込み
 }
 
 func (m *MastodonProvider) parseStreamingMessage(raw string) StreamingMessage {

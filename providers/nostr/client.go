@@ -11,6 +11,7 @@ import (
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 	"github.com/google/uuid"
 )
@@ -100,7 +101,7 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 
 			// 受信した生メッセージを保存
 			JSONSavePath := filepath.Join(dailyDir, dateStr+".jsonl")
-			m.AppendToFile(rawMsg, JSONSavePath)
+			providers.AppendToFile(rawMsg, JSONSavePath)
 
 			// URL抽出→キューイング
 			// リレーのwssはダウンロードできないので除外
@@ -149,16 +150,6 @@ func (m *NostrProvider) Close() error {
 		return m.ws.Close()
 	}
 	return nil
-}
-
-// 受信した生JSONをJson line形式で書き出す
-func (m *NostrProvider) AppendToFile(text string, filepath string) {
-    file, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-    if err != nil {
-        logger.Errorf("Failed to open file: %v", err)
-    }
-    defer file.Close()
-    fmt.Fprintln(file, text) //書き込み
 }
 
 
