@@ -12,8 +12,8 @@ import (
 
 // 各プラットフォーム（Misskey, Mastodon等）が実装すべきインターフェース
 type PlatformProvider interface {
-	Connect() error
-	ConnectChannel() error
+	Connect() (string, error)
+	ConnectChannel() ([]byte, error)
 	ReceiveMessages(output chan<- models.DownloadItem) error
 	CrawlNewServer(server chan <- models.Server) error
 	Close() error

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"log"
+	"path/filepath"
 	//"os/signal"
 	//"sync"
 	//"syscall"
@@ -15,6 +16,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/crawlManager"
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/utils"
 
 	// for debug 
 	// "net/http"
@@ -57,6 +59,15 @@ func main() {
 	for _, server := range serverList {
 		cm.NewServerReceiver <- server
 	}
+
+
+	utils.SaveArchiveInfo(
+		filepath.Join(downloadDir, "archive_info.jsonl"),
+		mode,
+		timelines,
+		scope,
+		serverList,
+	)
 	
 	startMessage(mode, serverList, timelines, downloadDir, media, scope)
 

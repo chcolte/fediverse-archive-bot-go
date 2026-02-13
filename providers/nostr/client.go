@@ -32,22 +32,22 @@ func NewNostrProvider(url string, downloadDir string) *NostrProvider {
 }
 
 // Nostr サーバーに WebSocket 接続
-func (m *NostrProvider) Connect() error {
+func (m *NostrProvider) Connect() (string, error) {
 	wsURL, httpURL := urlAdjust(m.URL)
 	ws, err := websocket.Dial(wsURL, "", httpURL)
 	if err != nil {
-		return err
+		return wsURL, err
 	}
 	m.ws = ws
 	logger.Info("Connected to ", wsURL)
-	return nil
+	return wsURL, nil
 }
 
 // チャンネルに接続
-func (m *NostrProvider) ConnectChannel() error {
+func (m *NostrProvider) ConnectChannel() ([]byte, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	m.subscriptionID = id.String()
 
@@ -59,11 +59,11 @@ func (m *NostrProvider) ConnectChannel() error {
 	logger.Debug("Send message: ", msg)
 
 	if err := websocket.Message.Send(m.ws, msg); err != nil {
-		return err
+		return []byte(msg), err
 	}
 
 	logger.Info("Connected to Timeline.")
-	return nil
+	return []byte(msg), nil
 }
 
 // メッセージを受信

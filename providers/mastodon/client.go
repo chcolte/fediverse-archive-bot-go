@@ -33,7 +33,8 @@ func NewMastodonProvider(url, timeline, downloadDir string) *MastodonProvider {
 }
 
 // Mastodon サーバーに WebSocket 接続
-func (m *MastodonProvider) Connect() error {
+// WebSocketのHTTP HeaderとResponseが取りたいところだが，今のパッケージだと無理
+func (m *MastodonProvider) Connect() (string, error) {
 	wsURL, httpURL := urlAdjust(m.URL)
 
 	tl := m.convertTimeline()
@@ -45,7 +46,7 @@ func (m *MastodonProvider) Connect() error {
 	if err == nil {
 		m.ws = ws
 		logger.Info("Connected to ", streamURL, " (no auth)")
-		return nil
+		return streamURL, nil
 	}
 	
 	logger.Debugf("Connection without auth failed for %s: %v, trying with token...", m.URL, err)
@@ -54,17 +55,17 @@ func (m *MastodonProvider) Connect() error {
 	accessToken, tokenErr := GetAccessToken(m.URL)
 	if tokenErr != nil {
 		logger.Errorf("Failed to get access token for %s: %v", m.URL, tokenErr)
-		return err // 元のエラーを返す
+		return streamURL, err // 元のエラーを返す
 	}
 
 	ws, err = m.tryConnect(streamURL+"&access_token="+accessToken, httpURL, accessToken)
 	if err != nil {
-		return fmt.Errorf("connection failed both with and without auth: %w", err)
+		return streamURL, fmt.Errorf("connection failed both with and without auth: %w", err)
 	}
 
 	m.ws = ws
 	logger.Info("Connected to ", streamURL, " (with token)")
-	return nil
+	return streamURL, nil
 }
 
 // tryConnect attempts to establish a WebSocket connection
@@ -86,9 +87,9 @@ func (m *MastodonProvider) tryConnect(streamURL, origin, token string) (*websock
 }
 
 // 指定されたタイムラインチャンネルに接続 (WebSocket接続時にすでに接続済み)
-func (m *MastodonProvider) ConnectChannel() error {
+func (m *MastodonProvider) ConnectChannel() ([]byte, error) {
 	logger.Info("Already connected to channel: ", m.Timeline)
-	return nil
+	return nil, nil
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信

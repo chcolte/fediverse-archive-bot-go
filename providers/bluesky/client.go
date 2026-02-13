@@ -35,20 +35,21 @@ func NewBlueskyProvider(url string, downloadDir string) *BlueskyProvider {
 }
 
 // Bluesky サーバーに WebSocket 接続
-func (m *BlueskyProvider) Connect() error {
+// WebSocketのHTTP HeaderとResponseが取りたいところだが，今のパッケージだと無理
+func (m *BlueskyProvider) Connect() (string, error) {
 	wsURL, httpURL := urlAdjust(m.URL)
 	ws, err := websocket.Dial(wsURL, "", httpURL)
 	if err != nil {
-		return err
+		return wsURL, err
 	}
 	m.ws = ws
 	logger.Info("Connected to ", wsURL)
-	return nil
+	return wsURL, nil
 }
 
 // チャンネルに接続せずとも流れてくる
-func (m *BlueskyProvider) ConnectChannel() error {
-	return nil
+func (m *BlueskyProvider) ConnectChannel() ([]byte, error) {
+	return nil, nil
 }
 
 // CBORメッセージヘッダー (Bluesky Firehose用)

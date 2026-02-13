@@ -11,11 +11,14 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/media-downloader"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
 	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	"github.com/chcolte/fediverse-archive-bot-go/utils"
+	"github.com/google/uuid"
 )
 
 /*
@@ -38,6 +41,7 @@ type Archiver struct {
 	Conn    *Connection
 	DLQueue chan models.DownloadItem
 	WG      *sync.WaitGroup
+	CrawlSessionID string
 }
 
 // Explorer: 新規サーバー探索
@@ -45,6 +49,7 @@ type Explorer struct {
 	Conn        *Connection
 	ServerQueue chan models.Server
 	WG          *sync.WaitGroup
+	CrawlSessionID string
 }
 
 // CrawlManager: 全体管理
@@ -136,7 +141,46 @@ func (c *CrawlManager) addKnownServer(server models.Server) {
 
 	serverListPath := filepath.Join(c.DownloadDir, server.Type, "server_list.txt")
 	c.AppendToFile(server.URL+" "+server.Type, serverListPath)
+
+	// NodeInfoを取得して保存（Nostr, Bluesky等は失敗してもスキップ）
+	c.saveNodeInfo(server)
 }
+
+func (c *CrawlManager) saveNodeInfo(server models.Server) {
+	info, err := nodeinfo.GetNodeInfo(server.URL)
+	if err != nil {
+		logger.Debugf("NodeInfo not available for %s: %v", server.URL, err)
+		return
+	}
+
+	savePath := filepath.Join(c.DownloadDir, server.Type, server.URL, "nodeinfo.jsonl")
+
+	extraMeta := map[string]string{
+		"source_url":     fmt.Sprintf("https://%s/.well-known/nodeinfo", server.URL),
+		"server_url":     server.URL,
+		"server_type":    server.Type,
+		"schema_version": info.Version,
+	}
+
+	if err := utils.SaveMetadata([]byte(info.RawJSON), "", savePath, extraMeta); err != nil {
+		logger.Errorf("Failed to save nodeinfo for %s: %v", server.URL, err)
+	}
+}
+
+// saveCrawlSession はクロールセッションのメタデータを保存する
+func (c *CrawlManager) saveCrawlSession(crawlSessionID string, target models.Target, role string) {
+	savePath := filepath.Join(c.DownloadDir, target.Server.Type, target.Server.URL, "crawl_sessions.jsonl")
+	meta := map[string]string{
+		"server_url":  target.Server.URL,
+		"server_type": target.Server.Type,
+		"timeline":    target.Timeline,
+		"role":        role,
+	}
+	if err := utils.SaveMetadata(nil, crawlSessionID, savePath, meta); err != nil {
+		logger.Errorf("Failed to save crawl session: %v", err)
+	}
+}
+
 
 func (c *CrawlManager) Start() {
 	for server := range c.NewServerReceiver {
@@ -177,6 +221,7 @@ func (c *CrawlManager) Start() {
 				Conn:    archiverConn,
 				DLQueue: make(chan models.DownloadItem, 100),
 				WG:      &sync.WaitGroup{},
+				CrawlSessionID: uuid.New().String(),
 			}
 			c.registerArchiver(archiver)
 
@@ -211,6 +256,7 @@ func (c *CrawlManager) Start() {
 				Conn:        explorerConn,
 				ServerQueue: c.NewServerReceiver,
 				WG:          &sync.WaitGroup{},
+				CrawlSessionID: uuid.New().String(),
 			}
 			c.registerExplorer(explorer)
 
@@ -257,17 +303,27 @@ func (c *CrawlManager) getProvider(target models.Target) (providers.PlatformProv
 func (c *CrawlManager) startArchiver(archiver *Archiver) {
 	conn := archiver.Conn
 
+	// クロールセッション情報を記録
+	c.saveCrawlSession(archiver.CrawlSessionID, conn.Target, "archiver")
+
 	// 接続
-	if err := conn.Provider.Connect(); err != nil {
+	targetURL, err := conn.Provider.Connect()
+	if err != nil {
 		logger.Error("Failed to connect:", err)
 		close(archiver.DLQueue)
 		return
 	}
+	savePath := filepath.Join(c.DownloadDir, conn.Target.Server.Type, conn.Target.Server.URL, "crawl_sessions.jsonl")
+	utils.SaveRequest(nil, targetURL, archiver.CrawlSessionID, savePath)
 
-	if err := conn.Provider.ConnectChannel(); err != nil {
+	sentMsg, err := conn.Provider.ConnectChannel()
+	if err != nil {
 		logger.Error("Failed to connect channel:", err)
 		close(archiver.DLQueue)
 		return
+	}
+	if sentMsg != nil {
+		utils.SaveRequest(sentMsg, targetURL, archiver.CrawlSessionID, savePath)
 	}
 
 	// 受信
@@ -282,13 +338,21 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 
 				// 再接続
 				conn.Provider.Close()
-				if err := conn.Provider.Connect(); err != nil {
+
+				archiver.CrawlSessionID = uuid.New().String()
+				c.saveCrawlSession(archiver.CrawlSessionID, conn.Target, "archiver")
+				
+				if targetURL, err := conn.Provider.Connect(); err != nil {
 					logger.Errorf("Reconnect failed: %v. Retrying... [%s]", err, conn.Target.Server.URL)
 					continue
+				} else {
+					utils.SaveRequest(nil, targetURL, archiver.CrawlSessionID, savePath)
 				}
-				if err := conn.Provider.ConnectChannel(); err != nil {
+				if sentMsg, err := conn.Provider.ConnectChannel(); err != nil {
 					logger.Errorf("ReconnectChannel failed: %v. Retrying... [%s]", err, conn.Target.Server.URL)
 					continue
+				} else if sentMsg != nil {
+					utils.SaveRequest(sentMsg, targetURL, archiver.CrawlSessionID, savePath)
 				}
 				logger.Infof("Reconnected successfully [%s]", conn.Target.Server.URL)
 
@@ -320,15 +384,25 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 func (c *CrawlManager) startExplorer(explorer *Explorer) {
 	conn := explorer.Conn
 
+	// クロールセッション情報を記録
+	c.saveCrawlSession(explorer.CrawlSessionID, conn.Target, "explorer")
+
 	// 接続
-	if err := conn.Provider.Connect(); err != nil {
+	targetURL, err := conn.Provider.Connect()
+	if err != nil {
 		logger.Error("Failed to connect:", err)
 		return
 	}
+	savePath := filepath.Join(c.DownloadDir, conn.Target.Server.Type, conn.Target.Server.URL, "crawl_sessions.jsonl")
+	utils.SaveRequest(nil, targetURL, explorer.CrawlSessionID, savePath)
 
-	if err := conn.Provider.ConnectChannel(); err != nil {
+	sentMsg, err := conn.Provider.ConnectChannel()
+	if err != nil {
 		logger.Error("Failed to connect channel:", err)
 		return
+	}
+	if sentMsg != nil {
+		utils.SaveRequest(sentMsg, targetURL, explorer.CrawlSessionID, savePath)
 	}
 
 	// 受信
@@ -343,13 +417,21 @@ func (c *CrawlManager) startExplorer(explorer *Explorer) {
 
 				// 再接続
 				conn.Provider.Close()
-				if err := conn.Provider.Connect(); err != nil {
+
+				explorer.CrawlSessionID = uuid.New().String()
+				c.saveCrawlSession(explorer.CrawlSessionID, conn.Target, "explorer")
+
+				if targetURL, err := conn.Provider.Connect(); err != nil {
 					logger.Errorf("Reconnect failed: %v. Retrying...", err)
 					continue
+				} else {
+					utils.SaveRequest(nil, targetURL, explorer.CrawlSessionID, savePath)
 				}
-				if err := conn.Provider.ConnectChannel(); err != nil {
+				if sentMsg, err := conn.Provider.ConnectChannel(); err != nil {
 					logger.Errorf("ReconnectChannel failed: %v. Retrying...", err)
 					continue
+				} else if sentMsg != nil {
+					utils.SaveRequest(sentMsg, targetURL, explorer.CrawlSessionID, savePath)
 				}
 				logger.Info("Reconnected successfully")
 

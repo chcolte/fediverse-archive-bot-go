@@ -30,22 +30,25 @@ func NewMisskeyProvider(url, timeline, downloadDir string) *MisskeyProvider {
 }
 
 // Misskey サーバーに WebSocket 接続
-func (m *MisskeyProvider) Connect() error {
+// WebSocketのHTTP HeaderとResponseが取りたいところだが，今のパッケージだと無理
+func (m *MisskeyProvider) Connect() (string, error) {
 	wsURL, httpURL := urlAdjust(m.URL)
-	ws, err := websocket.Dial(wsURL+"/streaming", "", httpURL)
+
+	ws, err := websocket.Dial(targetURL, "", httpURL)
 	if err != nil {
-		return err
+		return targetURL, err
 	}
 	m.ws = ws
-	logger.Debug("Connected to ", wsURL+"/streaming")
-	return nil
+	logger.Debug("Connected to ", targetURL)
+	return targetURL, nil
 }
 
 // 指定されたタイムラインチャンネルに接続
-func (m *MisskeyProvider) ConnectChannel() error {
+// WebSocketのHTTP HeaderとResponseが取りたいところだが，今のパッケージだと無理
+func (m *MisskeyProvider) ConnectChannel() ([]byte, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	channel := m.convertTimeline()
@@ -60,11 +63,11 @@ func (m *MisskeyProvider) ConnectChannel() error {
 	logger.Debug("Send message: ", msg)
 
 	if err := websocket.Message.Send(m.ws, msg); err != nil {
-		return err
+		return []byte(msg), err
 	}
 
 	logger.Debug("Connected to channel:", channel)
-	return nil
+	return []byte(msg), nil
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
