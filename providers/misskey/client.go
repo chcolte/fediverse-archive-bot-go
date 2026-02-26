@@ -34,13 +34,13 @@ func NewMisskeyProvider(url, timeline, downloadDir string) *MisskeyProvider {
 func (m *MisskeyProvider) Connect() (string, error) {
 	wsURL, httpURL := urlAdjust(m.URL)
 
-	ws, err := websocket.Dial(targetURL, "", httpURL)
+	ws, err := websocket.Dial(wsURL, "", httpURL)
 	if err != nil {
-		return targetURL, err
+		return wsURL, err
 	}
 	m.ws = ws
-	logger.Debug("Connected to ", targetURL)
-	return targetURL, nil
+	logger.Debug("Connected to ", wsURL)
+	return wsURL, nil
 }
 
 // 指定されたタイムラインチャンネルに接続
