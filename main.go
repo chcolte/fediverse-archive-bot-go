@@ -32,7 +32,7 @@ func main() {
 	// }()
 	
 
-	system, mode, url, serverListPath, timelineStr, downloadDir, verbose, media, parallelDownload, scope := readFlags()
+	system, mode, url, serverListPath, timelineStr, downloadDir, verbose, media, media_fetch_only, parallelDownload, scope := readFlags()
 	logger.SetVerbose(verbose)
 
 	// カンマ区切りのタイムラインを配列に変換
@@ -41,7 +41,7 @@ func main() {
 		timelines[i] = strings.TrimSpace(timelines[i])
 	}
 
-	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, parallelDownload, scope, timelines)
+	cm := crawlManager.NewCrawlManager(downloadDir, mode, media, media_fetch_only, parallelDownload, scope, timelines)
 
 	// set target servers
 	var serverList []models.Server;
@@ -114,7 +114,7 @@ func startMessage(mode string, serverList []models.Server, timelines []string, d
 	logger.SetFlags(log.LstdFlags)
 }
 
-func readFlags() (string, string, string, string, string, string, bool, bool, int, string) {
+func readFlags() (string, string, string, string, string, string, bool, bool, bool, int, string) {
 	var (
 		s = flag.String("s", "misskey", "target system. (e.g misskey, nostr)")
 		m = flag.String("m", "live", "archive mode.(currently live only)")
@@ -124,11 +124,12 @@ func readFlags() (string, string, string, string, string, string, bool, bool, in
 		d = flag.String("d", "downloads", "download directory")
 		v = flag.Bool("V", false, "verbose output")
 		M = flag.Bool("media", false, "download media files")
+		Mf = flag.Bool("media-fetch-only", false, "don't save media files")
 		P = flag.Int("parallel-download", 1, "Number of Media Downloaders")
 		S = flag.String("Scope", "server", "scope (e.g. unbounded, server, misskey, mastodon, nostr, bluesky)")
 	)
 	flag.Parse()
-	return *s, *m, *u, *a, *t, *d, *v, *M, *P, *S
+	return *s, *m, *u, *a, *t, *d, *v, *M, *Mf, *P, *S
 }
 
 func readServerList(serverpath string) []models.Server {

@@ -63,12 +63,13 @@ type CrawlManager struct {
 	DownloadDir      string
 	Mode             string // live, past
 	Media            bool
+	Media_fetch_only bool
 	ParallelDownload int
 	Scope            string
 	Timelines        []string // 共通タイムライン名のリスト (local, global)
 }
 
-func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownload int, scope string, timelines []string) *CrawlManager {
+func NewCrawlManager(downloadDir string, mode string, media bool, media_fetch_only bool, parallelDownload int, scope string, timelines []string) *CrawlManager {
 	return &CrawlManager{
 		NewServerReceiver: make(chan models.Server, 100),
 		ArchiverRegistry:  make(map[string]*Archiver),
@@ -78,6 +79,7 @@ func NewCrawlManager(downloadDir string, mode string, media bool, parallelDownlo
 		DownloadDir:       downloadDir,
 		Mode:              mode,
 		Media:             media,
+		Media_fetch_only:  media_fetch_only,
 		ParallelDownload:  parallelDownload,
 		Scope:             scope,
 		Timelines:         timelines,
@@ -368,7 +370,7 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 	if c.Media {
 		for i := 0; i < c.ParallelDownload; i++ {
 			archiver.WG.Add(1)
-			go mediaDownloader.MediaDownloader(archiver.DLQueue, archiver.WG, c.DownloadDir)
+			go mediaDownloader.MediaDownloader(archiver.DLQueue, archiver.WG, c.DownloadDir, c.Media_fetch_only)
 		}
 	} else {
 		go func() {

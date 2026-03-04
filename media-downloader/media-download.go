@@ -24,7 +24,7 @@ import (
 var urlCache = cache.New(24*time.Hour, 30*time.Minute)
 
 // MediaDownloader downloads assets from the download queue
-func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downloadDir string) {
+func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downloadDir string, media_fetch_only bool) {
 	defer wg.Done()
 	logger.Info("MediaDownloader started")
 
@@ -35,41 +35,68 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 	}
 
 	for item := range dlqueue {
-		if item.URL == "" {
+		if item.URL == "" || isRecentlyFetched(item.URL) {
 			continue
 		}
 
-		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
-			logger.Errorf("Failed to download %s: %v", item.URL, err)
-			// dlqueue <- item //TODO: リキューするなら，回数上限を設ける仕組みがないとスタック
+		resp, err := fetchFile(item.URL)
+		if err != nil {
+			logger.Errorf("Failed to fetch %s : %v", item.URL, err)
+			continue
 		}
+
+		if media_fetch_only {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		
+		}else{
+			err := saveFile(resp, item.URL, item.Datetime, downloadDir)
+			resp.Body.Close()
+			if err != nil {
+				logger.Errorf("Failed to download %s: %v", item.URL, err)
+				// dlqueue <- item //TODO: リキューするなら，回数上限を設ける仕組みがないとスタック
+			}
+		}
+		markAsFetched(item.URL)
 	}
 }
 
-// saveFile downloads a file from URL and saves it to the appropriate directory
-func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
-	// Skip if URL was recently downloaded
+func isRecentlyFetched(fileURL string) bool {
+	// Skip if URL was recently fetched
 	if _, found := urlCache.Get(fileURL); found {
 		logger.Debugf("Skipping recently downloaded URL: %s", fileURL)
-		return nil
+		return true
 	}
+	return false
+}
 
+func markAsFetched(fileURL string) {
+	// Mark URL as downloaded in cache
+	urlCache.SetDefault(fileURL, true)
+}
+
+func fetchFile(fileURL string) (*http.Response, error) {
 	// Skip TLS Verify (for Pywb proxy)
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	client := &http.Client{Transport: tr}
 
-	// Download file
+	// Fetch file
 	resp, err := client.Get(fileURL)
 	if err != nil {
 		logger.Debugf("Failed to http Get: %s", fileURL)
-		return err
+		return nil, err
 	}
-	defer resp.Body.Close()
-
+	
 	if resp.StatusCode != http.StatusOK {
-		return &httpError{status: resp.StatusCode}
+		resp.Body.Close()
+		return nil, &httpError{status: resp.StatusCode}
 	}
+	return resp, nil
+}
+
+// saveFile downloads a file from URL and saves it to the appropriate directory
+func saveFile(resp *http.Response, fileURL string, datetime time.Time, downloadDir string) error {
 
 	// Get Content-Type header
 	contentType := resp.Header.Get("Content-Type")
@@ -98,9 +125,6 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	if err := os.WriteFile(fileDownloadPathFull, buffer, 0644); err != nil {
 		return err
 	}
-
-	// Mark URL as downloaded in cache
-	urlCache.SetDefault(fileURL, true)
 
 	// Save metadata (今は決め打ち)
 	fileDownloadPathRelative := filepath.Join(assetsDir, filename)
