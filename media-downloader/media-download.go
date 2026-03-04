@@ -2,22 +2,26 @@ package mediaDownloader
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
-	"crypto/tls"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/patrickmn/go-cache"
 )
+
+// TTL: 24 hours, cleanup interval: 30 minutes.
+var urlCache = cache.New(24*time.Hour, 30*time.Minute)
 
 // MediaDownloader downloads assets from the download queue
 func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downloadDir string) {
@@ -37,18 +41,24 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 
 		if err := saveFile(item.URL, item.Datetime, downloadDir); err != nil {
 			logger.Errorf("Failed to download %s: %v", item.URL, err)
-			// dlqueue <- item //リキューするなら，回数上限を設ける仕組みがないとスタック
+			// dlqueue <- item //TODO: リキューするなら，回数上限を設ける仕組みがないとスタック
 		}
 	}
 }
 
 // saveFile downloads a file from URL and saves it to the appropriate directory
 func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
+	// Skip if URL was recently downloaded
+	if _, found := urlCache.Get(fileURL); found {
+		logger.Infof("Skipping recently downloaded URL: %s", fileURL)
+		return nil
+	}
+
 	// Skip TLS Verify (for Pywb proxy)
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	client := &http.Client{Transport: tr}
-	
+
 	// Download file
 	resp, err := client.Get(fileURL)
 	if err != nil {
@@ -88,6 +98,9 @@ func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	if err := os.WriteFile(fileDownloadPathFull, buffer, 0644); err != nil {
 		return err
 	}
+
+	// Mark URL as downloaded in cache
+	urlCache.SetDefault(fileURL, true)
 
 	// Save metadata (今は決め打ち)
 	fileDownloadPathRelative := filepath.Join(assetsDir, filename)
