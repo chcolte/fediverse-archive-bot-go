@@ -50,7 +50,7 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
 	// Skip if URL was recently downloaded
 	if _, found := urlCache.Get(fileURL); found {
-		logger.Infof("Skipping recently downloaded URL: %s", fileURL)
+		logger.Debugf("Skipping recently downloaded URL: %s", fileURL)
 		return nil
 	}
 
