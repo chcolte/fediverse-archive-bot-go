@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"crypto/tls"
 	"os"
 	"path"
 	"path/filepath"
@@ -43,8 +44,13 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 
 // saveFile downloads a file from URL and saves it to the appropriate directory
 func saveFile(fileURL string, datetime time.Time, downloadDir string) error {
+	// Skip TLS Verify (for Pywb proxy)
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	client := &http.Client{Transport: tr}
+	
 	// Download file
-	resp, err := http.Get(fileURL)
+	resp, err := client.Get(fileURL)
 	if err != nil {
 		logger.Debugf("Failed to http Get: %s", fileURL)
 		return err
