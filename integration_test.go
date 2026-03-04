@@ -37,14 +37,14 @@ func TestIntegration_Misskey(t *testing.T) {
 	provider := misskey.NewMisskeyProvider(serverURL, timeline, downloadDir)
 
 	// 1. Connect
-	if err := provider.Connect(); err != nil {
+	if _,err := provider.Connect(); err != nil {
 		t.Fatalf("Misskey: Connect() failed: %v", err)
 	}
 	defer provider.Close()
 	t.Log("Misskey: connected successfully")
 
 	// 2. ConnectChannel
-	if err := provider.ConnectChannel(); err != nil {
+	if _,err := provider.ConnectChannel(); err != nil {
 		t.Fatalf("Misskey: ConnectChannel() failed: %v", err)
 	}
 	t.Log("Misskey: channel connected")
@@ -104,14 +104,14 @@ func TestIntegration_Mastodon(t *testing.T) {
 	provider := mastodon.NewMastodonProvider(serverURL, timeline, downloadDir)
 
 	// 1. Connect
-	if err := provider.Connect(); err != nil {
+	if _,err := provider.Connect(); err != nil {
 		t.Fatalf("Mastodon: Connect() failed: %v", err)
 	}
 	defer provider.Close()
 	t.Log("Mastodon: connected successfully")
 
 	// 2. ConnectChannel
-	if err := provider.ConnectChannel(); err != nil {
+	if _,err := provider.ConnectChannel(); err != nil {
 		t.Fatalf("Mastodon: ConnectChannel() failed: %v", err)
 	}
 	t.Log("Mastodon: channel connected")
@@ -171,14 +171,14 @@ func TestIntegration_Bluesky(t *testing.T) {
 	provider := bluesky.NewBlueskyProvider(serverURL, downloadDir)
 
 	// 1. Connect
-	if err := provider.Connect(); err != nil {
+	if _,err := provider.Connect(); err != nil {
 		t.Fatalf("Bluesky: Connect() failed: %v", err)
 	}
 	defer provider.Close()
 	t.Log("Bluesky: connected successfully")
 
 	// 2. ConnectChannel (Blueskyでは不要だがインターフェース互換のため呼ぶ)
-	if err := provider.ConnectChannel(); err != nil {
+	if _,err := provider.ConnectChannel(); err != nil {
 		t.Fatalf("Bluesky: ConnectChannel() failed: %v", err)
 	}
 
@@ -245,14 +245,14 @@ func TestIntegration_Nostr(t *testing.T) {
 	provider := nostr.NewNostrProvider(serverURL, downloadDir)
 
 	// 1. Connect
-	if err := provider.Connect(); err != nil {
+	if _,err := provider.Connect(); err != nil {
 		t.Fatalf("Nostr: Connect() failed: %v", err)
 	}
 	defer provider.Close()
 	t.Log("Nostr: connected successfully")
 
 	// 2. ConnectChannel (REQを送信)
-	if err := provider.ConnectChannel(); err != nil {
+	if _,err := provider.ConnectChannel(); err != nil {
 		t.Fatalf("Nostr: ConnectChannel() failed: %v", err)
 	}
 	t.Log("Nostr: channel connected (REQ sent)")
