@@ -14,7 +14,7 @@ import (
 type PlatformProvider interface {
 	Connect() (string, error)
 	ConnectChannel() ([]byte, error)
-	ReceiveMessages(output chan<- models.DownloadItem) error
+	ReceiveMessages(output chan<- models.DownloadItem, message chan <- models.RawMessage) error
 	CrawlNewServer(server chan <- models.Server) error
 	Close() error
 }

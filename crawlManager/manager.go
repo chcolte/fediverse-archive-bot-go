@@ -13,11 +13,12 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
 	"github.com/chcolte/fediverse-archive-bot-go/providers"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
+	//"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
+	//"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
-	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	//"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 	"github.com/chcolte/fediverse-archive-bot-go/utils"
+	"github.com/chcolte/fediverse-archive-bot-go/writer"
 	"github.com/google/uuid"
 )
 
@@ -40,6 +41,7 @@ type Connection struct {
 type Archiver struct {
 	Conn    *Connection
 	DLQueue chan models.DownloadItem
+	MessageQueue chan models.RawMessage
 	WG      *sync.WaitGroup
 	CrawlSessionID string
 }
@@ -222,6 +224,7 @@ func (c *CrawlManager) Start() {
 			archiver := &Archiver{
 				Conn:    archiverConn,
 				DLQueue: make(chan models.DownloadItem, 100),
+				MessageQueue: make(chan models.RawMessage, 100),
 				WG:      &sync.WaitGroup{},
 				CrawlSessionID: uuid.New().String(),
 			}
@@ -285,18 +288,18 @@ func (c *CrawlManager) createConnection(target models.Target) (*Connection, erro
 
 func (c *CrawlManager) getProvider(target models.Target) (providers.PlatformProvider, error) {
 	server := target.Server
-	downloadPath := filepath.Join(c.DownloadDir, server.Type, server.URL)
+	//downloadPath := filepath.Join(c.DownloadDir, server.Type, server.URL)
 
 	switch server.Type {
 	case "misskey":
-		return misskey.NewMisskeyProvider(server.URL, target.Timeline, downloadPath), nil
-	case "nostr":
+		return misskey.NewMisskeyProvider(server.URL, target.Timeline), nil
+	/*case "nostr":
 		return nostr.NewNostrProvider(server.URL, downloadPath), nil
 	case "bluesky":
 		return bluesky.NewBlueskyProvider(server.URL, downloadPath), nil
 	case "mastodon":
 		return mastodon.NewMastodonProvider(server.URL, target.Timeline, downloadPath), nil
-	default:
+	*/default:
 		return nil, errors.New("unsupported system specified: " + server.Type)
 	}
 }
@@ -313,6 +316,7 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 	if err != nil {
 		logger.Error("Failed to connect:", err)
 		close(archiver.DLQueue)
+		close(archiver.MessageQueue)
 		return
 	}
 	savePath := filepath.Join(c.DownloadDir, conn.Target.Server.Type, conn.Target.Server.URL, "crawl_sessions.jsonl")
@@ -322,19 +326,29 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 	if err != nil {
 		logger.Error("Failed to connect channel:", err)
 		close(archiver.DLQueue)
+		close(archiver.MessageQueue)
 		return
 	}
 	if sentMsg != nil {
 		utils.SaveRequest(sentMsg, targetURL, archiver.CrawlSessionID, savePath)
 	}
 
+	// Start Writer
+	w := &writer.Writer{
+		BaseDir: filepath.Join(c.DownloadDir, conn.Target.Server.Type, conn.Target.Server.URL),
+		Timeline: conn.Target.Timeline,
+	}
+	go w.Run(archiver.MessageQueue)
+
 	// 受信
 	archiver.WG.Add(1)
 	go func() {
 		defer archiver.WG.Done()
 		defer conn.Provider.Close()
+		defer close(archiver.MessageQueue)
+		defer close(archiver.DLQueue)
 		for {
-			if err := conn.Provider.ReceiveMessages(archiver.DLQueue); err != nil {
+			if err := conn.Provider.ReceiveMessages(archiver.DLQueue, archiver.MessageQueue); err != nil {
 				logger.Errorf("ReceiveMessages error: %v. Reconnecting in 5 seconds... [%s]", err, conn.Target.Server.URL)
 				time.Sleep(5 * time.Second)
 

@@ -3,12 +3,10 @@ package misskey
 import (
 	"encoding/json"
 	"strings"
-	"os"
-	"path/filepath"
+	"time"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"github.com/google/uuid"
 	"golang.org/x/net/websocket"
 )
@@ -16,16 +14,14 @@ import (
 type MisskeyProvider struct {
 	URL      string
 	Timeline string
-	DownloadDir string
 	ws       *websocket.Conn
 }
 
 // 新しい MisskeyProvider を作成
-func NewMisskeyProvider(url, timeline, downloadDir string) *MisskeyProvider {
+func NewMisskeyProvider(url, timeline string) *MisskeyProvider {
 	return &MisskeyProvider{
 		URL:      url,
 		Timeline: timeline,
-		DownloadDir: downloadDir,
 	}
 }
 
@@ -71,14 +67,8 @@ func (m *MisskeyProvider) ConnectChannel() ([]byte, error) {
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
-func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
+func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem, message chan<- models.RawMessage) error {
 	logger.Info("MisskeyProvider: Starting to receive messages [", m.URL, "]")
-	
-	// ルートダウンロードディレクトリを作成
-	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
-		logger.Errorf("Failed to create root download directory: %v", err)
-		return err
-	}
 	
 	for {
 		// メッセージを受信
@@ -92,18 +82,15 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 		msg := m.parseStreamingMessage(rawMsg)
 		note := m.getNoteFromStreamingMessage(msg) // todo: 万に一つ，受信したメッセージにノートが含まれていない可能性をどうするか
 		logger.Debug("Received Note ID: ", note.ID)
-		
-		// 日毎ディレクトリを作成(なければ)
-		dateStr := note.CreatedAt.Format("2006-01-02")
-		dailyDir := filepath.Join(m.DownloadDir, dateStr)
-		if err := os.MkdirAll(dailyDir, 0755); err != nil {
-			logger.Errorf("Failed to create daily directory: %v", err)
-			return err
+	
+		// Messageをキューに送信	
+		message <- models.RawMessage{
+			Data:	[]byte(rawMsg),
+			CreatedAt: note.CreatedAt,
+			ReceivedAt: time.Now(),	
+			DataType: "json",
+			Metadata: nil,
 		}
-
-		// 受信した生メッセージを保存
-		JSONSavePath := filepath.Join(dailyDir, dateStr+"_"+m.Timeline+".jsonl")
-		providers.AppendToFile(rawMsg, JSONSavePath)
 
 		// URLを抽出
 		urls := SafeExtractURL(note)

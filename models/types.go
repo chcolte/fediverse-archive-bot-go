@@ -32,3 +32,12 @@ type Target struct {
 	Server   Server
 	Timeline string // timeline name (use TimelineLocal or TimelineGlobal)
 }
+
+// Providerが受信したメッセージ
+type RawMessage struct {
+	Data		[]byte    // 生データ
+    CreatedAt	time.Time //
+	ReceivedAt	time.Time
+    DataType	string    // ex. cbor, json 
+    Metadata	map[string]string 
+}
