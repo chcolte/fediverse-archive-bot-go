@@ -22,13 +22,15 @@ var ServerSessionID = uuid.New().String()
 
 // レコードタイプ定数
 const (
-	RecordTypeArchiveInfo = "archive_info"
-	RecordTypeResponse = "response"
-	RecordTypeRequest  = "request"
-	RecordTypeMetadata = "metadata"
+	RecordTypeArchiveInfo  = "archive_info"
+	RecordTypeResponse     = "response"
+	RecordTypeRequest      = "request"
+	RecordTypeMetadata     = "metadata"
+	RecordTypeMessage      = "message"
+	RecordTypeMediaMapping = "media_mapping"
 )
 
-// saveRecord: JSONL形式で保存するベース関数。
+// SaveRecord はJSONL形式で保存するベース関数。
 // エンベロープ（必須フィールド）のみを管理し、dataの中身は呼び出し側が構築する。
 //
 // 必須フィールド（自動付与）:
@@ -36,7 +38,7 @@ const (
 //   - server_session:  プロセスセッションID
 //   - saved_at:        保存時刻（RFC3339）
 //   - record_type:     レコード種別
-func saveRecord(recordType string, data interface{}, savePath string) error {
+func SaveRecord(recordType string, data interface{}, savePath string) error {
 	envelope := struct {
 		RecordID      string      `json:"record_id"`
 		ServerSession string      `json:"server_session"`
@@ -105,7 +107,7 @@ func SaveArchiveInfo(savePath string, mode string, timelines []string, scope str
 		Scope:       scope,
 		SeedServers: strings.Join(urls, ","),
 	}
-	return saveRecord(RecordTypeArchiveInfo, data, savePath)
+	return SaveRecord(RecordTypeArchiveInfo, data, savePath)
 }
 
 // computeDigest は生データのSHA256ダイジェストを計算する。
@@ -125,13 +127,13 @@ func buildDataWithContent(rawJSON []byte, meta map[string]interface{}) map[strin
 }
 
 // SaveResponse は受信データ（WebSocketメッセージ等）を保存する。
-func SaveResponse(rawJSON []byte, sourceURL string, crawlSessionID string, savePath string) error {
-	meta := map[string]interface{}{
-		"source_url":       sourceURL,
-		"crawl_session_id": crawlSessionID,
-	}
-	return saveRecord(RecordTypeResponse, buildDataWithContent(rawJSON, meta), savePath)
-}
+// func SaveResponse(rawJSON []byte, sourceURL string, crawlSessionID string, savePath string) error {
+// 	meta := map[string]interface{}{
+// 		"source_url":       sourceURL,
+// 		"crawl_session_id": crawlSessionID,
+// 	}
+// 	return SaveRecord(RecordTypeResponse, buildDataWithContent(rawJSON, meta), savePath)
+// }
 
 // SaveRequest は送信リクエスト（WebSocket接続、チャンネル購読等）を保存する。
 func SaveRequest(rawJSON []byte, targetURL string, crawlSessionID string, savePath string) error {
@@ -139,7 +141,7 @@ func SaveRequest(rawJSON []byte, targetURL string, crawlSessionID string, savePa
 		"target_url":       targetURL,
 		"crawl_session_id": crawlSessionID,
 	}
-	return saveRecord(RecordTypeRequest, buildDataWithContent(rawJSON, meta), savePath)
+	return SaveRecord(RecordTypeRequest, buildDataWithContent(rawJSON, meta), savePath)
 }
 
 // SaveMetadata は補足情報（NodeInfo、クロールセッション等）を保存する。
@@ -150,5 +152,19 @@ func SaveMetadata(rawJSON []byte, crawlSessionID string, savePath string, meta m
 		data[k] = v
 	}
 	data["crawl_session_id"] = crawlSessionID
-	return saveRecord(RecordTypeMetadata, buildDataWithContent(rawJSON, data), savePath)
+	return SaveRecord(RecordTypeMetadata, buildDataWithContent(rawJSON, data), savePath)
+}
+
+// SaveMessage は受信メッセージをエンベロープ付きで保存する。
+func SaveMessage(msg models.RawMessage, crawlSessionID string, savePath string) error {
+	meta := map[string]interface{}{
+		"crawl_session_id": crawlSessionID,
+		"received_at":      msg.ReceivedAt.Format(time.RFC3339),
+		"created_at":       msg.CreatedAt.Format(time.RFC3339),
+		"data_type":        msg.DataType,
+	}
+	for k, v := range msg.Metadata {
+		meta[k] = v
+	}
+	return SaveRecord(RecordTypeMessage, buildDataWithContent(msg.Data, meta), savePath)
 }

@@ -337,6 +337,7 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 	w := &writer.Writer{
 		BaseDir: filepath.Join(c.DownloadDir, conn.Target.Server.Type, conn.Target.Server.URL),
 		Timeline: conn.Target.Timeline,
+		CrawlSessionID: archiver.CrawlSessionID,
 	}
 	go w.Run(archiver.MessageQueue)
 
@@ -356,6 +357,7 @@ func (c *CrawlManager) startArchiver(archiver *Archiver) {
 				conn.Provider.Close()
 
 				archiver.CrawlSessionID = uuid.New().String()
+				w.CrawlSessionID = archiver.CrawlSessionID
 				c.saveCrawlSession(archiver.CrawlSessionID, conn.Target, "archiver")
 				
 				if targetURL, err := conn.Provider.Connect(); err != nil {

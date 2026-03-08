@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
+	"github.com/chcolte/fediverse-archive-bot-go/utils"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -134,31 +134,12 @@ func saveFile(resp *http.Response, fileURL string, datetime time.Time, downloadD
 
 // writeFileNameURLMapping saves the mapping between filename and download URL
 func writeFileNameURLMapping(fileURL, filepath string, downloadtime string, saveHere string) error {
-	// Ensure directory exists
-	dir := path.Dir(saveHere)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
+	data := map[string]interface{}{
+		"filepath":     filepath,
+		"url":          fileURL,
+		"downloadtime": downloadtime,
 	}
-
-	data := models.FilenameURLMapping{
-		Filepath:     filepath,
-		URL:          fileURL,
-		Downloadtime: downloadtime,
-	}
-
-	line, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(saveHere, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(string(line) + "\n")
-	return err
+	return utils.SaveRecord(utils.RecordTypeMediaMapping, data, saveHere)
 }
 
 // determineFileName determines the file name based on Content-Type and URL
