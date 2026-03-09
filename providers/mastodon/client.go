@@ -3,8 +3,6 @@ package mastodon
 import (
 	"encoding/json"
 	"strings"
-	"os"
-	"path/filepath"
 	"fmt"
 	"time"
 	"net/url"
@@ -12,23 +10,20 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
-	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 )
 
 type MastodonProvider struct {
 	URL      string
 	Timeline string
-	DownloadDir string
 	ws       *websocket.Conn
 }
 
 // 新しい MastodonProvider を作成
-func NewMastodonProvider(url, timeline, downloadDir string) *MastodonProvider {
+func NewMastodonProvider(url, timeline string) *MastodonProvider {
 	return &MastodonProvider{
 		URL:      url,
 		Timeline: timeline,
-		DownloadDir: downloadDir,
 	}
 }
 
@@ -93,14 +88,8 @@ func (m *MastodonProvider) ConnectChannel() ([]byte, error) {
 }
 
 // メッセージを受信し、メディアURLを output チャンネルに送信
-func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
+func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem, message chan<- models.RawMessage) error {
 	logger.Info("MastodonProvider: Starting to receive messages")
-	
-	// ルートダウンロードディレクトリを作成
-	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
-		logger.Errorf("Failed to create root download directory: %v", err)
-		return err
-	}
 	
 	for {
 		// メッセージを受信
@@ -111,7 +100,6 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 		}
 
 		// メッセージをパース
-		dateStr := ""
 		var payload Payload
 		msg := m.parseStreamingMessage(rawMsg)
 		if(msg.Event == "update"){
@@ -120,30 +108,20 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem) er
 			logger.Debug("Received message: ", payload.ID)
 			logger.Debug("Received message: ", payload.CreatedAt)
 			logger.Debug("Received message: ", payload.URL)
-			dateStr = payload.CreatedAt.Format("2006-01-02")
-			
-		}else if(msg.Event == "delete"){
-			dateStr = time.Now().Format("2006-01-02")
 		}
 		
-		// 日毎ディレクトリを作成(なければ)
-		
-		dailyDir := filepath.Join(m.DownloadDir, dateStr)
-		assetsDir := filepath.Join(dailyDir, "data")
-
-		if err := os.MkdirAll(assetsDir, 0755); err != nil {
-			logger.Errorf("Failed to create dailydownload directory: %v", err)
-			continue
+		// Messageをキューに送信	
+		message <- models.RawMessage{
+			Data:	[]byte(rawMsg),
+			CreatedAt: payload.CreatedAt,
+			ReceivedAt: time.Now(),	
+			DataType: "json",
+			Metadata: nil,
 		}
-
-		//受信した生メッセージを保存
-		JSONSavePath := filepath.Join(dailyDir, dateStr+"_"+m.Timeline+".jsonl")
-		providers.AppendToFile(rawMsg, JSONSavePath)
-
+		
 		// URLを抽出
 		urls := m.extractMediaURLsFromPayload(payload)
 		
-
 		// URLをDLキューに送信
 		for _, url := range urls {
 			output <- models.DownloadItem{

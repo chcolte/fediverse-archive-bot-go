@@ -2,32 +2,27 @@ package nostr
 
 import (
 	"strings"
-	"os"
 	"fmt"
 	"time"
-	"path/filepath"
 	"encoding/json"
 	"mvdan.cc/xurls/v2"
 
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 	"github.com/google/uuid"
 )
 
 type NostrProvider struct {
 	URL      string
-	DownloadDir string
 	ws       *websocket.Conn
 	subscriptionID string
 }
 
 // 新しい NostrProvider を作成
-func NewNostrProvider(url string, downloadDir string) *NostrProvider {
+func NewNostrProvider(url string) *NostrProvider {
 	return &NostrProvider{
 		URL: url,
-		DownloadDir: downloadDir,
 	}
 }
 
@@ -67,14 +62,8 @@ func (m *NostrProvider) ConnectChannel() ([]byte, error) {
 }
 
 // メッセージを受信
-func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
+func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem, message chan<- models.RawMessage) error {
 	logger.Info("NostrProvider: Starting to receive messages")
-
-	// ルートダウンロードディレクトリを作成
-	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
-		logger.Errorf("Failed to create root download directory: %v", err)
-		return err
-	}
 
 	afterEOSE := false
 	for {
@@ -90,19 +79,14 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem) error
 		if (msg.Type == "EVENT" && afterEOSE) {
 			logger.Debug("Parsed message: ", msg.Event.CreatedAt)
 
-			//日毎ディレクトリを作成(なければ)
-			dateStr := time.Unix(msg.Event.CreatedAt, 0).Format("2006-01-02")
-			dailyDir := filepath.Join(m.DownloadDir, dateStr)
-
-			if err := os.MkdirAll(dailyDir, 0755); err != nil {
-				logger.Errorf("Failed to create daily directory: %v", err)
-				continue
+			message <- models.RawMessage{
+				Data:	[]byte(rawMsg),
+				CreatedAt: time.Unix(msg.Event.CreatedAt,0),
+				ReceivedAt: time.Now(),	
+				DataType: "json",
+				Metadata: nil,
 			}
-
-			// 受信した生メッセージを保存
-			JSONSavePath := filepath.Join(dailyDir, dateStr+".jsonl")
-			providers.AppendToFile(rawMsg, JSONSavePath)
-
+			
 			// URL抽出→キューイング
 			// リレーのwssはダウンロードできないので除外
 			// TODO: メディア以外のURL(wss, html etc.)が多くを占めているが，それらは除外してもよいのでは。

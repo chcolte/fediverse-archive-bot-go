@@ -13,10 +13,10 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/models"
 	"github.com/chcolte/fediverse-archive-bot-go/nodeinfo"
 	"github.com/chcolte/fediverse-archive-bot-go/providers"
-	//"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
-	//"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/bluesky"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
-	//"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
 	"github.com/chcolte/fediverse-archive-bot-go/utils"
 	"github.com/chcolte/fediverse-archive-bot-go/writer"
 	"github.com/google/uuid"
@@ -293,13 +293,13 @@ func (c *CrawlManager) getProvider(target models.Target) (providers.PlatformProv
 	switch server.Type {
 	case "misskey":
 		return misskey.NewMisskeyProvider(server.URL, target.Timeline), nil
-	/*case "nostr":
-		return nostr.NewNostrProvider(server.URL, downloadPath), nil
+	case "nostr":
+		return nostr.NewNostrProvider(server.URL), nil
 	case "bluesky":
-		return bluesky.NewBlueskyProvider(server.URL, downloadPath), nil
+		return bluesky.NewBlueskyProvider(server.URL), nil
 	case "mastodon":
-		return mastodon.NewMastodonProvider(server.URL, target.Timeline, downloadPath), nil
-	*/default:
+		return mastodon.NewMastodonProvider(server.URL, target.Timeline), nil
+	default:
 		return nil, errors.New("unsupported system specified: " + server.Type)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/chcolte/fediverse-archive-bot-go/providers/mastodon"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/misskey"
 	"github.com/chcolte/fediverse-archive-bot-go/providers/nostr"
+	"github.com/chcolte/fediverse-archive-bot-go/writer"
 )
 
 const (
@@ -34,7 +35,7 @@ func TestIntegration_Misskey(t *testing.T) {
 
 	t.Logf("Misskey: connecting to %s (timeline=%s, dir=%s)", serverURL, timeline, downloadDir)
 
-	provider := misskey.NewMisskeyProvider(serverURL, timeline, downloadDir)
+	provider := misskey.NewMisskeyProvider(serverURL, timeline)
 
 	// 1. Connect
 	if _,err := provider.Connect(); err != nil {
@@ -51,11 +52,21 @@ func TestIntegration_Misskey(t *testing.T) {
 
 	// 3. ReceiveMessages (goroutine)
 	output := make(chan models.DownloadItem, 100)
+	message := make(chan models.RawMessage, 100)
 	errCh := make(chan error, 1)
 	receivedCount := 0
 
+	w := &writer.Writer{
+		BaseDir:        downloadDir,
+		Timeline:       timeline,
+		CrawlSessionID: "test-session",
+	}
+	go w.Run(message)
+
 	go func() {
-		errCh <- provider.ReceiveMessages(output)
+		defer close(message)
+		defer close(output)
+		errCh <- provider.ReceiveMessages(output, message)
 	}()
 
 	// 4. タイムアウトまでメッセージを受信
@@ -65,7 +76,10 @@ func TestIntegration_Misskey(t *testing.T) {
 loop_misskey:
 	for {
 		select {
-		case item := <-output:
+		case item, ok := <-output:
+			if !ok {
+				break loop_misskey
+			}
 			receivedCount++
 			t.Logf("Misskey: received download item #%d: %s", receivedCount, truncateURL(item.URL))
 		case <-timer.C:
@@ -81,6 +95,7 @@ loop_misskey:
 
 	// 5. Close
 	provider.Close()
+	time.Sleep(200 * time.Millisecond)
 
 	// 6. ファイル保存の検証
 	verifyFilesExist(t, "Misskey", downloadDir)
@@ -101,7 +116,7 @@ func TestIntegration_Mastodon(t *testing.T) {
 
 	t.Logf("Mastodon: connecting to %s (timeline=%s, dir=%s)", serverURL, timeline, downloadDir)
 
-	provider := mastodon.NewMastodonProvider(serverURL, timeline, downloadDir)
+	provider := mastodon.NewMastodonProvider(serverURL, timeline)
 
 	// 1. Connect
 	if _,err := provider.Connect(); err != nil {
@@ -118,11 +133,21 @@ func TestIntegration_Mastodon(t *testing.T) {
 
 	// 3. ReceiveMessages (goroutine)
 	output := make(chan models.DownloadItem, 100)
+	message := make(chan models.RawMessage, 100)
 	errCh := make(chan error, 1)
 	receivedCount := 0
 
+	w := &writer.Writer{
+		BaseDir:        downloadDir,
+		Timeline:       timeline,
+		CrawlSessionID: "test-session",
+	}
+	go w.Run(message)
+
 	go func() {
-		errCh <- provider.ReceiveMessages(output)
+		defer close(message)
+		defer close(output)
+		errCh <- provider.ReceiveMessages(output, message)
 	}()
 
 	// 4. タイムアウトまでメッセージを受信
@@ -132,7 +157,10 @@ func TestIntegration_Mastodon(t *testing.T) {
 loop_mastodon:
 	for {
 		select {
-		case item := <-output:
+		case item, ok := <-output:
+			if !ok {
+				break loop_mastodon
+			}
 			receivedCount++
 			t.Logf("Mastodon: received download item #%d: %s", receivedCount, truncateURL(item.URL))
 		case <-timer.C:
@@ -148,6 +176,7 @@ loop_mastodon:
 
 	// 5. Close
 	provider.Close()
+	time.Sleep(200 * time.Millisecond)
 
 	// 6. ファイル保存の検証
 	verifyFilesExist(t, "Mastodon", downloadDir)
@@ -168,7 +197,7 @@ func TestIntegration_Bluesky(t *testing.T) {
 
 	t.Logf("Bluesky: connecting to firehose (dir=%s)", downloadDir)
 
-	provider := bluesky.NewBlueskyProvider(serverURL, downloadDir)
+	provider := bluesky.NewBlueskyProvider(serverURL)
 
 	// 1. Connect
 	if _,err := provider.Connect(); err != nil {
@@ -184,11 +213,21 @@ func TestIntegration_Bluesky(t *testing.T) {
 
 	// 3. ReceiveMessages (goroutine)
 	output := make(chan models.DownloadItem, 100)
+	message := make(chan models.RawMessage, 100)
 	errCh := make(chan error, 1)
 	receivedCount := 0
 
+	w := &writer.Writer{
+		BaseDir:        downloadDir,
+		Timeline:       "firehose",
+		CrawlSessionID: "test-session",
+	}
+	go w.Run(message)
+
 	go func() {
-		errCh <- provider.ReceiveMessages(output)
+		defer close(message)
+		defer close(output)
+		errCh <- provider.ReceiveMessages(output, message)
 	}()
 
 	// 4. タイムアウトまでメッセージを受信
@@ -199,7 +238,10 @@ func TestIntegration_Bluesky(t *testing.T) {
 loop_bluesky:
 	for {
 		select {
-		case item := <-output:
+		case item, ok := <-output:
+			if !ok {
+				break loop_bluesky
+			}
 			receivedCount++
 			if receivedCount <= 5 {
 				t.Logf("Bluesky: received download item #%d: %s", receivedCount, truncateURL(item.URL))
@@ -220,6 +262,7 @@ loop_bluesky:
 
 	// 5. Close
 	provider.Close()
+	time.Sleep(200 * time.Millisecond)
 
 	// 6. ファイル保存の検証
 	verifyFilesExist(t, "Bluesky", downloadDir)
@@ -242,7 +285,7 @@ func TestIntegration_Nostr(t *testing.T) {
 
 	t.Logf("Nostr: connecting to %s (dir=%s)", serverURL, downloadDir)
 
-	provider := nostr.NewNostrProvider(serverURL, downloadDir)
+	provider := nostr.NewNostrProvider(serverURL)
 
 	// 1. Connect
 	if _,err := provider.Connect(); err != nil {
@@ -259,11 +302,21 @@ func TestIntegration_Nostr(t *testing.T) {
 
 	// 3. ReceiveMessages (goroutine)
 	output := make(chan models.DownloadItem, 100)
+	message := make(chan models.RawMessage, 100)
 	errCh := make(chan error, 1)
 	receivedCount := 0
 
+	w := &writer.Writer{
+		BaseDir:        downloadDir,
+		Timeline:       "global",
+		CrawlSessionID: "test-session",
+	}
+	go w.Run(message)
+
 	go func() {
-		errCh <- provider.ReceiveMessages(output)
+		defer close(message)
+		defer close(output)
+		errCh <- provider.ReceiveMessages(output, message)
 	}()
 
 	// 4. タイムアウトまでメッセージを受信
@@ -273,7 +326,10 @@ func TestIntegration_Nostr(t *testing.T) {
 loop_nostr:
 	for {
 		select {
-		case item := <-output:
+		case item, ok := <-output:
+			if !ok {
+				break loop_nostr
+			}
 			receivedCount++
 			if receivedCount <= 5 {
 				t.Logf("Nostr: received download item #%d: %s", receivedCount, truncateURL(item.URL))
@@ -294,6 +350,7 @@ loop_nostr:
 
 	// 5. Close
 	provider.Close()
+	time.Sleep(200 * time.Millisecond)
 
 	// 6. ファイル保存の検証
 	verifyFilesExist(t, "Nostr", downloadDir)

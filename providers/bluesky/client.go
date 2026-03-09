@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,22 +13,19 @@ import (
 	"github.com/ipld/go-car/v2"
 	"github.com/chcolte/fediverse-archive-bot-go/logger"
 	"github.com/chcolte/fediverse-archive-bot-go/models"
-	"github.com/chcolte/fediverse-archive-bot-go/providers"
 	"golang.org/x/net/websocket"
 )
 
 type BlueskyProvider struct {
 	URL      string
-	DownloadDir string
 	ws       *websocket.Conn
 	subscriptionID string
 }
 
 // 新しい BlueskyProvider を作成
-func NewBlueskyProvider(url string, downloadDir string) *BlueskyProvider {
+func NewBlueskyProvider(url string) *BlueskyProvider {
 	return &BlueskyProvider{
 		URL: url,
-		DownloadDir: downloadDir,
 	}
 }
 
@@ -59,14 +54,8 @@ type FirehoseHeader struct {
 }
 
 // CBORメッセージを受信
-func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) error {
+func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem, message chan<- models.RawMessage) error {
 	logger.Info("BlueskyProvider: Starting to receive messages")
-
-	// ルートダウンロードディレクトリを作成
-	if err := os.MkdirAll(m.DownloadDir, 0755); err != nil {
-		logger.Errorf("Failed to create root download directory: %v", err)
-		return err
-	}
 
 	for {
 		var rawMsg []byte
@@ -107,17 +96,7 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 
 		// 受信時刻と日付
 		now := time.Now()
-		dateStr := now.Format("2006-01-02")
 		
-		// 日毎ディレクトリを作成
-		dailyDir := filepath.Join(m.DownloadDir, dateStr)
-		cborDir := filepath.Join(dailyDir, "cbor")
-
-		if err := os.MkdirAll(cborDir, 0755); err != nil {
-			logger.Errorf("Failed to create cbor directory: %v", err)
-			continue
-		}
-
 		// シーケンス番号を取得（すべてのメッセージタイプで共通）
 		var seq uint64
 		switch s := payloadMap["seq"].(type) {
@@ -132,14 +111,10 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 			seq = uint64(now.UnixNano())
 		}
 
-		// CBORバイナリを保存
 		cborFileName := fmt.Sprintf("%d_%s.cbor", seq, strings.TrimPrefix(messageType, "#"))
-		cborPath := filepath.Join(cborDir, cborFileName)
-		if err := os.WriteFile(cborPath, rawMsg, 0644); err != nil {
-			logger.Errorf("Failed to save CBOR file: %v", err)
-		}
-
+		
 		// #commitの場合のみ詳細メタデータを作成
+		var metadata FirehoseMetadata;
 		if messageType == "#commit" {
 			commit := parseCommitPayload(payloadMap)
 			if commit == nil {
@@ -158,7 +133,7 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 			}
 
 			// メタデータを作成
-			metadata := FirehoseMetadata{
+			metadata = FirehoseMetadata{
 				Seq:        commit.Seq,
 				Time:       commit.Time,
 				Type:       messageType,
@@ -169,19 +144,25 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 				ReceivedAt: now.Format(time.RFC3339),
 			}
 
-			// メタデータをJSONL形式で保存
-			jsonlPath := filepath.Join(dailyDir, dateStr+".jsonl")
-			metadataJSON, err := json.Marshal(metadata)
-			if err != nil {
-				logger.Errorf("Failed to marshal metadata: %v", err)
-			} else {
-				providers.AppendToFile(string(metadataJSON), jsonlPath)
+			metadataJSON, _ := json.Marshal(metadata)
+			
+			logger.Info(commit.Time);
+			// metadataをキューに送信	
+			message <- models.RawMessage{
+				Data:	[]byte(metadataJSON),
+				CreatedAt: time.Now(), //fix: use commit.Time!!!
+				ReceivedAt: time.Now(),	
+				DataType: "json",
+				Metadata: map[string]string{
+					"filename": cborFileName,
+					"metadata_json": string(metadataJSON),
+				},
 			}
 
 			// ログ出力
 			logger.Debugf("Saved commit seq=%d repo=%s ops=%d", commit.Seq, commit.Repo, len(commit.Ops))
 
-			// CARブロックからメディアURLを抽出
+			// CARブロックからメディアURLを抽出+queue
 			if len(commit.Blocks) > 0 {
 				mediaURLs := m.extractMediaURLsFromCAR(commit.Repo, commit.Blocks)
 				for _, url := range mediaURLs {
@@ -198,7 +179,7 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 				repo, _ = payloadMap["repo"].(string)
 			}
 
-			metadata := FirehoseMetadata{
+			metadata = FirehoseMetadata{
 				Seq:        seq,
 				Type:       messageType,
 				Repo:       repo,
@@ -206,15 +187,28 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem) err
 				ReceivedAt: now.Format(time.RFC3339),
 			}
 
-			jsonlPath := filepath.Join(dailyDir, dateStr+".jsonl")
-			metadataJSON, err := json.Marshal(metadata)
-			if err != nil {
-				logger.Errorf("Failed to marshal metadata: %v", err)
-			} else {
-				providers.AppendToFile(string(metadataJSON), jsonlPath)
+			metadataJSON, _ := json.Marshal(metadata)
+			message <- models.RawMessage{
+				Data:	[]byte(metadataJSON),
+				ReceivedAt: time.Now(),	
+				DataType: "json",
+				Metadata: nil,
 			}
-
 			logger.Debugf("Saved %s message seq=%d", messageType, seq)
+		}
+	
+		metadataJSON, _ := json.Marshal(metadata)
+
+		// CBORBinaryをキューに送信	
+		message <- models.RawMessage{
+			Data:	rawMsg,
+			CreatedAt: time.Now(), //fix: use commit.Time!!!!
+			ReceivedAt: time.Now(),	
+			DataType: "cbor",
+			Metadata: map[string]string{
+				"filename": cborFileName,
+				"metadata_json": string(metadataJSON),
+			},
 		}
 	}
 }
