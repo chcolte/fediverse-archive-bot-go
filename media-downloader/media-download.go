@@ -35,7 +35,12 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 	}
 
 	for item := range dlqueue {
+		if len(dlqueue) > 90 { // MagicNumber: dlqueueのバッファが100なので90を指定。
+			logger.Errorf("Reaching media download queue limit! Currently %d . Stopped all archive system.", len(dlqueue))
+		}
+
 		if item.URL == "" || isRecentlyFetched(item.URL) {
+			logger.Debug("Skiped fetch Media: "+item.URL)
 			continue
 		}
 
@@ -44,11 +49,11 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 			logger.Errorf("Failed to fetch %s : %v", item.URL, err)
 			continue
 		}
-
+		
 		if media_fetch_only {
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
-		
+			
 		}else{
 			err := saveFile(resp, item.URL, item.Datetime, downloadDir)
 			resp.Body.Close()
@@ -56,6 +61,8 @@ func MediaDownloader(dlqueue chan models.DownloadItem, wg *sync.WaitGroup, downl
 				logger.Errorf("Failed to download %s: %v", item.URL, err)
 				// dlqueue <- item //TODO: リキューするなら，回数上限を設ける仕組みがないとスタック
 			}
+			
+			logger.Debug("Downloaded Media: "+item.URL)
 		}
 		markAsFetched(item.URL)
 	}
