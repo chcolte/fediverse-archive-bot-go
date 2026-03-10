@@ -12,6 +12,8 @@ type LogLevel int
 const (
 	// LevelError for error messages (always shown)
 	LevelError LogLevel = iota
+	// LevelWarn for warning messages
+	LevelWarn
 	// LevelInfo for general information (always shown)
 	LevelInfo
 	// LevelDebug for detailed debug information (shown only in verbose mode)
@@ -23,6 +25,7 @@ type Logger struct {
 	verbose     bool
 	mu          sync.Mutex
 	errorLogger *log.Logger
+	warnLogger  *log.Logger
 	infoLogger  *log.Logger
 	debugLogger *log.Logger
 }
@@ -39,6 +42,7 @@ func New(verbose bool) *Logger {
 	return &Logger{
 		verbose:     verbose,
 		errorLogger: log.New(os.Stderr, "[ERROR] ", log.LstdFlags),
+		warnLogger:  log.New(os.Stdout, "[WARN]  ", log.LstdFlags),
 		infoLogger:  log.New(os.Stdout, "[INFO]  ", log.LstdFlags),
 		debugLogger: log.New(os.Stdout, "[DEBUG] ", log.LstdFlags),
 	}
@@ -87,6 +91,16 @@ func Error(v ...interface{}) {
 // Errorf logs a formatted error message (always shown)
 func Errorf(format string, v ...interface{}) {
 	defaultLogger.errorLogger.Output(2, fmt.Sprintf(format, v...))
+}
+
+// Warn logs an informational message (always shown)
+func Warn(v ...interface{}) {
+	defaultLogger.warnLogger.Output(2, fmt.Sprint(v...))
+}
+
+// Warnf logs a formatted informational message (always shown)
+func Warnf(format string, v ...interface{}) {
+	defaultLogger.warnLogger.Output(2, fmt.Sprintf(format, v...))
 }
 
 // Info logs an informational message (always shown)
