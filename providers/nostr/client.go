@@ -93,9 +93,13 @@ func (m *NostrProvider) ReceiveMessages(output chan<- models.DownloadItem, messa
 			rxStrict := xurls.Strict()
 			foundURLs := rxStrict.FindAllString(rawMsg, -1)
 			for _, url := range foundURLs {
-				output <- models.DownloadItem{
-					URL: url,
+				select {
+				case output <- models.DownloadItem {
+					URL:      url,
 					Datetime: time.Unix(msg.Event.CreatedAt, 0),
+				}:
+				default:
+					logger.Warn("Skipped enqueue media. Media download queue is full.: ", url)
 				}
 			}
 

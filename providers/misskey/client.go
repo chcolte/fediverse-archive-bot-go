@@ -97,9 +97,13 @@ func (m *MisskeyProvider) ReceiveMessages(output chan<- models.DownloadItem, mes
 
 		// URLをDLキューに送信
 		for _, url := range urls {
-			output <- models.DownloadItem{
+			select {
+			case output <- models.DownloadItem {
 				URL:      url,
 				Datetime: note.CreatedAt,
+			}:
+			default:
+				logger.Warn("Skipped enqueue media. Media download queue is full.: ", url)
 			}
 		}
 	}

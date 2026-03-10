@@ -166,9 +166,13 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem, mes
 			if len(commit.Blocks) > 0 {
 				mediaURLs := m.extractMediaURLsFromCAR(commit.Repo, commit.Blocks)
 				for _, url := range mediaURLs {
-					output <- models.DownloadItem{
+					select {
+					case output <- models.DownloadItem {
 						URL:      url,
 						Datetime: now,
+					}:
+					default:
+						logger.Warn("Skipped enqueue media. Media download queue is full.: ", url)
 					}
 				}
 			}

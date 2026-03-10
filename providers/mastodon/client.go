@@ -124,9 +124,13 @@ func (m *MastodonProvider) ReceiveMessages(output chan<- models.DownloadItem, me
 		
 		// URLをDLキューに送信
 		for _, url := range urls {
-			output <- models.DownloadItem{
+			select {
+			case output <- models.DownloadItem {
 				URL:      url,
 				Datetime: payload.CreatedAt,
+			}:
+			default:
+				logger.Warn("Skipped enqueue media. Media download queue is full.: ", url)
 			}
 		}
 	}
