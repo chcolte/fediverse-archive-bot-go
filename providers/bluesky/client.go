@@ -146,7 +146,6 @@ func (m *BlueskyProvider) ReceiveMessages(output chan<- models.DownloadItem, mes
 
 			metadataJSON, _ := json.Marshal(metadata)
 			
-			logger.Info(commit.Time);
 			// metadataをキューに送信	
 			message <- models.RawMessage{
 				Data:	[]byte(metadataJSON),
