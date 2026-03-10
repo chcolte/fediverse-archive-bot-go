@@ -65,6 +65,8 @@ func SaveRecord(recordType string, data interface{}, savePath string) error {
 	}
 
 	// JSONL形式でappend
+	// TODO: 将来的には，ファイルを開きっぱなしにして，ストリームを流し込むような形にできないだろうか -> Encoder
+	// TODO: bufioも使えれば速そう
 	f, err := os.OpenFile(savePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)

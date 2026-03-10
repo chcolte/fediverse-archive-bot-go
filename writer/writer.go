@@ -4,6 +4,7 @@ package writer
 import (
     "os"
     "path/filepath"
+    "time"
 
     "github.com/chcolte/fediverse-archive-bot-go/logger"
     "github.com/chcolte/fediverse-archive-bot-go/models"
@@ -31,7 +32,7 @@ func (w *Writer) writeMessage(msg models.RawMessage) error {
 
 	switch msg.DataType {
 	case "cbor":
-        return w.writeCBOR(msg, dailyDir, dateStr)
+        return w.writeCBOR(msg, dailyDir, dateStr) // fix?: msgからdatesdrもdailysdrも導出できるのに，引数として取らせているのはなんかへんだよね
 	
 	case "json":
         return w.writeJSON(msg, dailyDir, dateStr)
@@ -40,7 +41,15 @@ func (w *Writer) writeMessage(msg models.RawMessage) error {
 }
 
 func (w *Writer) writeJSON(msg models.RawMessage, dailyDir, dateStr string) error {
-    savePath := filepath.Join(dailyDir, dateStr+"_"+w.Timeline+".jsonl")
+    suffix := string(time.Now().Format("2006-01-02"))
+    /* msg.receivedAtをつかうべきか，time.now()をつかうべきか
+        url: https://github.com/chcolte/fediverse-archive-bot-go/issues/8
+        receiveしてから，書き込むまでにタイムラグが一応存在はするから，どこかでスタックした場合，外部からファイルmvしたときの衝突は起こりうる可能性はある
+        ならば，受信時刻ではなく，保存時刻でファイルを分割するべきなような気がする
+        そもそも，ファイルの分割が主目的であって，1時間毎に保存先を変えるとか，100MBを超える毎に保存先を変えるとか，色々選択肢を今後作ることになるんではないか。保存時刻ベースで一旦処理する
+    */
+    
+    savePath := filepath.Join(dailyDir, dateStr+"_"+w.Timeline+"_"+suffix+".jsonl")
     return utils.SaveMessage(msg, w.CrawlSessionID, savePath)
 }
 
@@ -62,8 +71,7 @@ func (w *Writer) writeCBOR(msg models.RawMessage, dailyDir, dateStr string) erro
             DataType:   "json",
             Metadata:   msg.Metadata,
         }
-        jsonlPath := filepath.Join(dailyDir, dateStr+"_"+w.Timeline+".jsonl")
-        return utils.SaveMessage(metaMsg, w.CrawlSessionID, jsonlPath)
+        w.writeJSON(metaMsg, dailyDir, dateStr)
     }
     return nil
 }
